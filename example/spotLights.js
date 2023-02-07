@@ -73,6 +73,7 @@ async function init() {
 	renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 	renderer.setClearColor( 0, 0 );
 	renderer.shadowMap.enabled = true;
+	renderer.physicallyCorrectLights = true;
 	document.body.appendChild( renderer.domElement );
 
 	// init camera
@@ -112,7 +113,8 @@ async function init() {
 
 	// load the env map
 	const envMapPromise = new RGBELoader()
-		.loadAsync( 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/equirectangular/royal_esplanade_1k.hdr' ).then( texture => {
+		.loadAsync( 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/equirectangular/royal_esplanade_1k.hdr' )
+		.then( texture => {
 
 			texture.mapping = THREE.EquirectangularReflectionMapping;
 			scene.environment = texture;
@@ -146,7 +148,7 @@ async function init() {
 
 			// init environment
 			const floor = new THREE.Mesh(
-				new THREE.CylinderBufferGeometry( 8, 8, 0.5, 200 ),
+				new THREE.CylinderGeometry( 8, 8, 0.5, 200 ),
 				new THREE.MeshStandardMaterial( { color: 0xffffff, roughness: 0.5, metalness: 0.2 } ),
 			);
 			floor.geometry = floor.geometry.toNonIndexed();
@@ -251,9 +253,12 @@ async function init() {
 			const material = ptRenderer.material;
 
 			material.bvh.updateFrom( bvh );
-			material.normalAttribute.updateFrom( geometry.attributes.normal );
-			material.tangentAttribute.updateFrom( geometry.attributes.tangent );
-			material.uvAttribute.updateFrom( geometry.attributes.uv );
+			material.attributesArray.updateFrom(
+				geometry.attributes.normal,
+				geometry.attributes.tangent,
+				geometry.attributes.uv,
+				geometry.attributes.color,
+			);
 			material.materialIndexAttribute.updateFrom( geometry.attributes.materialIndex );
 			material.textures.setTextures( renderer, 2048, 2048, textures );
 			material.materials.updateFrom( materials, textures );

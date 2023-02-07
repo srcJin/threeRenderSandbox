@@ -18,7 +18,7 @@ const params = {
 	acesToneMapping: true,
 	stableNoise: false,
 	tiles: 2,
-	bounces: 15,
+	bounces: 5,
 	multipleImportanceSampling: true,
 	resolutionScale: 1 / window.devicePixelRatio,
 	environmentBlur: 0,
@@ -37,7 +37,7 @@ if ( aspectRatio < 0.65 ) {
 	params.tiles = 2;
 	params.multipleImportanceSampling = false;
 	params.environmentBlur = 0.35;
-	hideInfo = true;
+	params.hideInfo = true;
 
 }
 
@@ -83,19 +83,15 @@ async function init() {
 
 	envMapGenerator = new BlurredEnvMapGenerator( renderer );
 
-	const envMapPromise = new Promise( resolve => {
+	const envMapPromise = new RGBELoader()
+		.loadAsync( 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/autoshop_01_1k.hdr' )
+		.then( texture => {
 
-		new RGBELoader()
-			.load( 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/autoshop_01_1k.hdr', texture => {
+			envMap = texture;
 
-				envMap = texture;
+			updateEnvBlur();
 
-				updateEnvBlur();
-				resolve();
-
-			} );
-
-	} );
+		} );
 
 	const generator = new PathTracingSceneWorker();
 	const gltfPromise = new GLTFLoader()
@@ -113,7 +109,7 @@ async function init() {
 			box.setFromObject( gltf.scene );
 
 			const floor = new THREE.Mesh(
-				new THREE.CylinderBufferGeometry( 3, 3, 0.05, 200 ),
+				new THREE.CylinderGeometry( 3, 3, 0.05, 200 ),
 				new THREE.MeshPhysicalMaterial( { color: 0xffffff, roughness: 0, metalness: 0.25 } ),
 			);
 			floor.geometry = floor.geometry.toNonIndexed();
@@ -168,9 +164,12 @@ async function init() {
 			const material = ptRenderer.material;
 
 			material.bvh.updateFrom( bvh );
-			material.normalAttribute.updateFrom( geometry.attributes.normal );
-			material.tangentAttribute.updateFrom( geometry.attributes.tangent );
-			material.uvAttribute.updateFrom( geometry.attributes.uv );
+			material.attributesArray.updateFrom(
+				geometry.attributes.normal,
+				geometry.attributes.tangent,
+				geometry.attributes.uv,
+				geometry.attributes.color,
+			);
 			material.materialIndexAttribute.updateFrom( geometry.attributes.materialIndex );
 			material.textures.setTextures( renderer, 2048, 2048, textures );
 			material.materials.updateFrom( materials, textures );
@@ -257,7 +256,7 @@ async function init() {
 	} );
 	envFolder.add( params, 'environmentRotation', 0, 2 * Math.PI ).onChange( v => {
 
-		ptRenderer.material.environmentRotation.setFromMatrix4( new THREE.Matrix4().makeRotationY( v ) );
+		ptRenderer.material.environmentRotation.makeRotationY( v );
 		ptRenderer.reset();
 
 	} );

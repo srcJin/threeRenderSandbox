@@ -1,9 +1,9 @@
 import { DataTexture, RGBAFormat, ClampToEdgeWrapping, FloatType, FrontSide, BackSide, DoubleSide } from 'three';
+import { reduceTexturesToUniqueSources, getTextureHash } from './utils.js';
 
 const MATERIAL_PIXELS = 45;
 const MATERIAL_STRIDE = MATERIAL_PIXELS * 4;
 
-const SIDE_OFFSET = 13 * 4 + 3; // s12.a
 const MATTE_OFFSET = 14 * 4 + 0; // s14.r
 const SHADOW_OFFSET = 14 * 4 + 1; // s14.g
 
@@ -39,45 +39,6 @@ export class MaterialsTexture extends DataTexture {
 
 	}
 
-	setSide( materialIndex, side ) {
-
-		const array = this.image.data;
-		const index = materialIndex * MATERIAL_STRIDE + SIDE_OFFSET;
-		switch ( side ) {
-
-		case FrontSide:
-			array[ index ] = 1;
-			break;
-		case BackSide:
-			array[ index ] = - 1;
-			break;
-		case DoubleSide:
-			array[ index ] = 0;
-			break;
-
-		}
-
-	}
-
-	getSide( materialIndex ) {
-
-		const array = this.image.data;
-		const index = materialIndex * MATERIAL_STRIDE + SIDE_OFFSET;
-		switch ( array[ index ] ) {
-
-		case 0:
-			return DoubleSide;
-		case 1:
-			return FrontSide;
-		case - 1:
-			return BackSide;
-
-		}
-
-		return 0;
-
-	}
-
 	setMatte( materialIndex, matte ) {
 
 		const array = this.image.data;
@@ -98,7 +59,16 @@ export class MaterialsTexture extends DataTexture {
 
 		function getTexture( material, key, def = - 1 ) {
 
-			return key in material ? textures.indexOf( material[ key ] ) : def;
+			if ( key in material && material[ key ] ) {
+
+				const hash = getTextureHash( material[ key ] );
+				return uniqueTextureLookup[ hash ];
+
+			} else {
+
+				return def;
+
+			}
 
 		}
 
@@ -180,6 +150,15 @@ export class MaterialsTexture extends DataTexture {
 		const dimension = Math.ceil( Math.sqrt( pixelCount ) );
 		const { threeCompatibilityTransforms, image } = this;
 
+		// get the list of textures with unique sources
+		const uniqueTextures = reduceTexturesToUniqueSources( textures );
+		const uniqueTextureLookup = {};
+		for ( let i = 0, l = uniqueTextures.length; i < l; i ++ ) {
+
+			uniqueTextureLookup[ getTextureHash( uniqueTextures[ i ] ) ] = i;
+
+		}
+
 		if ( image.width !== dimension ) {
 
 			this.dispose();
@@ -210,9 +189,9 @@ export class MaterialsTexture extends DataTexture {
 			// sample 1
 			// metalness & roughness
 			floatArray[ index ++ ] = getField( m, 'metalness', 0.0 );
-			floatArray[ index ++ ] = textures.indexOf( m.metalnessMap );
+			floatArray[ index ++ ] = getTexture( m, 'metalnessMap' );
 			floatArray[ index ++ ] = getField( m, 'roughness', 0.0 );
-			floatArray[ index ++ ] = textures.indexOf( m.roughnessMap );
+			floatArray[ index ++ ] = getTexture( m, 'roughnessMap' );
 
 			// sample 2
 			// transmission & emissiveIntensity
@@ -336,8 +315,9 @@ export class MaterialsTexture extends DataTexture {
 			floatArray[ index ++ ] = getField( m, 'specularIntensity', 1.0 );
 			floatArray[ index ++ ] = getTexture( m, 'specularIntensityMap' );
 
-			// thickness
-			floatArray[ index ++ ] = getField( m, 'thickness', 0.0 ) === 0.0 && getField( m, 'attenuationDistance', Infinity ) === Infinity;
+			// isThinFilm
+			const isThinFilm = getField( m, 'thickness', 0.0 ) === 0.0 && getField( m, 'attenuationDistance', Infinity ) === Infinity;
+			floatArray[ index ++ ] = Number( isThinFilm );
 			index ++;
 
 			// sample 12
@@ -364,12 +344,32 @@ export class MaterialsTexture extends DataTexture {
 			// side & matte
 			floatArray[ index ++ ] = m.opacity;
 			floatArray[ index ++ ] = m.alphaTest;
-			index ++; // side
+			if ( ! isThinFilm && m.transmission > 0.0 ) {
+
+				floatArray[ index ++ ] = 0;
+
+			} else {
+
+				switch ( m.side ) {
+
+				case FrontSide:
+					floatArray[ index ++ ] = 1;
+					break;
+				case BackSide:
+					floatArray[ index ++ ] = - 1;
+					break;
+				case DoubleSide:
+					floatArray[ index ++ ] = 0;
+					break;
+
+				}
+
+			}
 
 			// sample 14
 			index ++; // matte
 			index ++; // shadow
-			floatArray[ index ++ ] = Number( m.vertexColors ); // vertexColors
+			floatArray[ index ++ ] = Number( m.vertexColors ) | ( Number( m.flatShading ) << 1 ); // vertexColors & flatShading
 			floatArray[ index ++ ] = Number( m.transparent ); // transparent
 
 			// map transform 15

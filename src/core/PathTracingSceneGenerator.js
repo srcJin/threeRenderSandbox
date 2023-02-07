@@ -13,7 +13,7 @@ export class PathTracingSceneGenerator {
 
 		for ( let i = 0, l = scene.length; i < l; i ++ ) {
 
-			scene[ i ].traverse( c => {
+			scene[ i ].traverseVisible( c => {
 
 				if ( c.isSkinnedMesh || c.isMesh && c.morphTargetInfluences ) {
 
@@ -33,7 +33,7 @@ export class PathTracingSceneGenerator {
 
 					meshes.push( c );
 
-				} else if ( c.isRectAreaLight || c.isSpotLight ) {
+				} else if ( c.isRectAreaLight || c.isSpotLight || c.isDirectionalLight || c.isPointLight ) {
 
 					lights.push( c );
 

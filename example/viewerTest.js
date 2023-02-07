@@ -10,6 +10,7 @@ import {
 	CustomBlending,
 	EquirectangularReflectionMapping,
 	MathUtils,
+	BufferAttribute,
 } from 'three';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
@@ -20,6 +21,8 @@ import { PathTracingSceneWorker } from '../src/workers/PathTracingSceneWorker.js
 import { PhysicalPathTracingMaterial, PathTracingRenderer, MaterialReducer } from '../src/index.js';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import * as MikkTSpace from 'three/examples/jsm/libs/mikktspace.module.js';
 
 const CONFIG_URL = 'https://raw.githubusercontent.com/google/model-viewer/master/packages/render-fidelity-tools/test/config.json';
 const BASE_URL = 'https://raw.githubusercontent.com/google/model-viewer/master/packages/render-fidelity-tools/test/config/';
@@ -28,6 +31,7 @@ const urlParams = new URLSearchParams( window.location.search );
 const maxSamples = parseInt( urlParams.get( 'samples' ) ) || - 1;
 const hideUI = urlParams.get( 'hideUI' ) === 'true';
 const tiles = parseInt( urlParams.get( 'tiles' ) ) || 2;
+const scale = parseInt( urlParams.get( 'scale' ) ) || ( 1 / window.devicePixelRatio );
 
 const params = {
 
@@ -37,13 +41,14 @@ const params = {
 	tilesX: tiles,
 	tilesY: tiles,
 	samplesPerFrame: 1,
-	scale: 1 / window.devicePixelRatio,
+	scale: scale,
 
 	model: '',
 	checkerboardTransparency: true,
 
 	enable: true,
 	bounces: 10,
+	transmissiveBounces: 10,
 	pause: false,
 
 	displayImage: false,
@@ -194,6 +199,7 @@ function animate() {
 		ptRenderer.material.materials.updateFrom( sceneInfo.materials, sceneInfo.textures );
 		ptRenderer.material.filterGlossyFactor = 0.5;
 		ptRenderer.material.bounces = params.bounces;
+		ptRenderer.material.transmissiveBounces = params.transmissiveBounces;
 		ptRenderer.material.physicalCamera.updateFrom( camera );
 		ptRenderer.material.environmentIntensity = params.environmentIntensity;
 
@@ -289,6 +295,11 @@ function buildGui() {
 
 	} );
 	pathTracingFolder.add( params, 'bounces', 1, 20, 1 ).onChange( () => {
+
+		ptRenderer.reset();
+
+	} );
+	pathTracingFolder.add( params, 'transmissiveBounces', 1, 20, 1 ).onChange( () => {
 
 		ptRenderer.reset();
 
@@ -408,9 +419,45 @@ async function updateModel() {
 
 	const onFinish = async () => {
 
+		await MikkTSpace.ready;
+
 		const reducer = new MaterialReducer();
 		reducer.process( model );
 		model.updateMatrixWorld();
+
+		model.traverse( c => {
+
+			if ( c.geometry ) {
+
+				if ( ! c.geometry.hasAttribute( 'normal' ) ) {
+
+					c.geometry.computeVertexNormals();
+
+				}
+
+				if ( ! c.geometry.attributes.tangent ) {
+
+					if ( c.geometry.hasAttribute( 'uv' ) ) {
+
+						BufferGeometryUtils.computeMikkTSpaceTangents( c.geometry, MikkTSpace );
+						c.material = c.material.clone();
+						if ( c.material.normalScale ) c.material.normalScale.y *= - 1;
+						if ( c.material.clearcoatNormalScale ) c.material.clearcoatNormalScale.y *= - 1;
+
+					} else {
+
+						c.geometry.setAttribute(
+							'tangent',
+							new BufferAttribute( new Float32Array( c.geometry.attributes.position.count * 4 ), 4, false ),
+						);
+
+					}
+
+				}
+
+			}
+
+		} );
 
 		const generator = new PathTracingSceneWorker();
 		const result = await generator.generate( model, { onProgress: v => {
@@ -423,19 +470,22 @@ async function updateModel() {
 		sceneInfo = result;
 		scene.add( sceneInfo.scene );
 
-		const { bvh, textures, materials } = result;
+		const { bvh, textures, materials, lights } = result;
 		const geometry = bvh.geometry;
 		const material = ptRenderer.material;
 
 		material.bvh.updateFrom( bvh );
-		material.normalAttribute.updateFrom( geometry.attributes.normal );
-		material.tangentAttribute.updateFrom( geometry.attributes.tangent );
-		material.uvAttribute.updateFrom( geometry.attributes.uv );
+		material.attributesArray.updateFrom(
+			geometry.attributes.normal,
+			geometry.attributes.tangent,
+			geometry.attributes.uv,
+			geometry.attributes.color,
+		);
 		material.materialIndexAttribute.updateFrom( geometry.attributes.materialIndex );
-		material.colorAttribute.updateFrom( geometry.attributes.color );
 		material.textures.setTextures( renderer, 2048, 2048, textures );
 		material.materials.updateFrom( materials, textures );
 		material.envMapInfo.updateFrom( envMap );
+		material.lights.updateFrom( lights );
 
 		generator.dispose();
 
@@ -448,7 +498,7 @@ async function updateModel() {
 		geometry.computeBoundingSphere();
 
 		// mirror the model-viewer near / far planes
-		const radius = geometry.boundingSphere.radius;
+		const radius = Math.max( orbit.radius, geometry.boundingSphere.radius );
 		camera.near = 2 * radius / 1000;
 		camera.far = 2 * radius;
 		camera.updateProjectionMatrix();

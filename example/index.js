@@ -4,11 +4,10 @@ import {
 	Box3,
 	LoadingManager,
 	Sphere,
-	Color,
 	DoubleSide,
 	Mesh,
 	MeshStandardMaterial,
-	PlaneBufferGeometry,
+	PlaneGeometry,
 	Group,
 	MeshPhysicalMaterial,
 	WebGLRenderer,
@@ -18,7 +17,6 @@ import {
 	MeshBasicMaterial,
 	sRGBEncoding,
 	CustomBlending,
-	Matrix4
 } from 'three';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
@@ -29,7 +27,7 @@ import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { generateRadialFloorTexture } from './utils/generateRadialFloorTexture.js';
 import { PathTracingSceneWorker } from '../src/workers/PathTracingSceneWorker.js';
-import { PhysicalPathTracingMaterial, PathTracingRenderer, MaterialReducer, BlurredEnvMapGenerator } from '../src/index.js';
+import { PhysicalPathTracingMaterial, PathTracingRenderer, MaterialReducer, BlurredEnvMapGenerator, GradientEquirectTexture } from '../src/index.js';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
@@ -46,6 +44,31 @@ const envMaps = {
 	'Circus Arena': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/circus_arena_1k.hdr',
 	'Chinese Garden': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/chinese_garden_1k.hdr',
 	'Autoshop': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/autoshop_01_1k.hdr',
+
+	'Measuring Lab': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/vintage_measuring_lab_2k.hdr',
+	'Whale Skeleton': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/whale_skeleton_2k.hdr',
+	'Hall of Mammals': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/hall_of_mammals_2k.hdr',
+
+	'Drachenfels Cellar': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/drachenfels_cellar_2k.hdr',
+	'Adams Place Bridge': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/adams_place_bridge_2k.hdr',
+	'Sepulchral Chapel Rotunda': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/sepulchral_chapel_rotunda_2k.hdr',
+	'Peppermint Powerplant': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/peppermint_powerplant_2k.hdr',
+	'Noon Grass': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/noon_grass_2k.hdr',
+	'Narrow Moonlit Road': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/narrow_moonlit_road_2k.hdr',
+	'St Peters Square Night': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/st_peters_square_night_2k.hdr',
+	'Brown Photostudio 01': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/brown_photostudio_01_2k.hdr',
+	'Rainforest Trail': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/rainforest_trail_2k.hdr',
+	'Brown Photostudio 07': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/brown_photostudio_07_2k.hdr',
+	'Brown Photostudio 06': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/brown_photostudio_06_2k.hdr',
+	'Dancing Hall': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/dancing_hall_2k.hdr',
+	'Aristea Wreck Puresky': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/aristea_wreck_puresky_2k.hdr',
+	'Modern Buildings 2': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/modern_buildings_2_2k.hdr',
+	'Thatch Chapel': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/thatch_chapel_2k.hdr',
+	'Vestibule': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/vestibule_2k.hdr',
+	'Blocky Photo Studio': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/blocky_photo_studio_1k.hdr',
+	'Christmas Photo Studio 07': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/christmas_photo_studio_07_2k.hdr',
+	'Aerodynamics Workshop': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/aerodynamics_workshop_1k.hdr',
+
 };
 
 const models = window.MODEL_LIST || {};
@@ -73,7 +96,7 @@ const params = {
 
 	model: initialModel,
 
-	envMap: envMaps[ 'Royal Esplanade' ],
+	envMap: envMaps[ 'Aristea Wreck Puresky' ],
 
 	gradientTop: '#bfd8ff',
 	gradientBottom: '#ffffff',
@@ -91,14 +114,14 @@ const params = {
 	checkerboardTransparency: true,
 
 	enable: true,
-	bounces: 3,
+	bounces: 5,
 	filterGlossyFactor: 0.5,
 	pause: false,
 
-	floorColor: '#080808',
+	floorColor: '#111111',
 	floorOpacity: 1.0,
-	floorRoughness: 0.1,
-	floorMetalness: 0.0
+	floorRoughness: 0.2,
+	floorMetalness: 0.2,
 
 };
 
@@ -106,7 +129,7 @@ let creditEl, loadingEl, samplesEl;
 let floorPlane, gui, stats, sceneInfo;
 let renderer, orthoCamera, perspectiveCamera, activeCamera;
 let ptRenderer, fsQuad, controls, scene;
-let envMap, envMapGenerator;
+let envMap, envMapGenerator, backgroundMap;
 let loadingModel = false;
 let delaySamples = 0;
 
@@ -135,14 +158,18 @@ async function init() {
 	orthoCamera = new OrthographicCamera( orthoWidth / - 2, orthoWidth / 2, orthoHeight / 2, orthoHeight / - 2, 0, 100 );
 	orthoCamera.position.set( - 1, 0.25, 1 );
 
+	backgroundMap = new GradientEquirectTexture();
+	backgroundMap.topColor.set( params.bgGradientTop );
+	backgroundMap.bottomColor.set( params.bgGradientBottom );
+	backgroundMap.update();
+
 	ptRenderer = new PathTracingRenderer( renderer );
 	ptRenderer.alpha = true;
 	ptRenderer.material = new PhysicalPathTracingMaterial();
 	ptRenderer.tiles.set( params.tiles, params.tiles );
-	ptRenderer.material.setDefine( 'FEATURE_GRADIENT_BG', 1 );
 	ptRenderer.material.setDefine( 'FEATURE_MIS', Number( params.multipleImportanceSampling ) );
-	ptRenderer.material.bgGradientTop.set( params.bgGradientTop );
-	ptRenderer.material.bgGradientBottom.set( params.bgGradientBottom );
+	ptRenderer.material.backgroundMap = backgroundMap;
+	ptRenderer.material.transmissiveBounces = 10;
 
 	fsQuad = new FullScreenQuad( new MeshBasicMaterial( {
 		map: ptRenderer.target.texture,
@@ -157,24 +184,24 @@ async function init() {
 
 	const floorTex = generateRadialFloorTexture( 2048 );
 	floorPlane = new Mesh(
-		new PlaneBufferGeometry(),
+		new PlaneGeometry(),
 		new MeshStandardMaterial( {
 			map: floorTex,
 			transparent: true,
-			color: 0x080808,
+			color: 0x111111,
 			roughness: 0.1,
-			metalness: 0.0
+			metalness: 0.0,
+			side: DoubleSide,
 		} )
 	);
-	floorPlane.scale.setScalar( 3 );
+	floorPlane.scale.setScalar( 5 );
 	floorPlane.rotation.x = - Math.PI / 2;
 
 	stats = new Stats();
 	document.body.appendChild( stats.dom );
 	renderer.physicallyCorrectLights = true;
 	renderer.toneMapping = ACESFilmicToneMapping;
-	ptRenderer.material.setDefine( 'FEATURE_GRADIENT_BG', 1 );
-	scene.background = new Color( 0x060606 );
+	scene.background = backgroundMap;
 	ptRenderer.tiles.set( params.tilesX, params.tilesY );
 
 	updateCamera( params.cameraProjection );
@@ -204,8 +231,6 @@ function animate() {
 	floorPlane.material.roughness = params.floorRoughness;
 	floorPlane.material.metalness = params.floorMetalness;
 	floorPlane.material.opacity = params.floorOpacity;
-	ptRenderer.material.bgGradientTop.set( params.bgGradientTop );
-	ptRenderer.material.bgGradientBottom.set( params.bgGradientBottom );
 
 	if ( ptRenderer.samples < 1.0 || ! params.enable ) {
 
@@ -362,7 +387,7 @@ function buildGui() {
 	} ).name( 'intensity' );
 	environmentFolder.add( params, 'environmentRotation', 0, 2 * Math.PI ).onChange( v => {
 
-		ptRenderer.material.environmentRotation.setFromMatrix4( new Matrix4().makeRotationY( v ) );
+		ptRenderer.material.environmentRotation.makeRotationY( v );
 		ptRenderer.reset();
 
 	} );
@@ -371,26 +396,33 @@ function buildGui() {
 	const backgroundFolder = gui.addFolder( 'background' );
 	backgroundFolder.add( params, 'backgroundType', [ 'Environment', 'Gradient' ] ).onChange( v => {
 
-		ptRenderer.material.setDefine( 'FEATURE_GRADIENT_BG', Number( v === 'Gradient' ) );
 		if ( v === 'Gradient' ) {
 
-			scene.background = new Color( 0x060606 );
+			scene.background = backgroundMap;
+			ptRenderer.material.backgroundMap = backgroundMap;
 
 		} else {
 
 			scene.background = scene.environment;
+			ptRenderer.material.backgroundMap = null;
 
 		}
 
 		ptRenderer.reset();
 
 	} );
-	backgroundFolder.addColor( params, 'bgGradientTop' ).onChange( () => {
+	backgroundFolder.addColor( params, 'bgGradientTop' ).onChange( v => {
+
+		backgroundMap.topColor.set( v );
+		backgroundMap.update();
 
 		ptRenderer.reset();
 
 	} );
-	backgroundFolder.addColor( params, 'bgGradientBottom' ).onChange( () => {
+	backgroundFolder.addColor( params, 'bgGradientBottom' ).onChange( v => {
+
+		backgroundMap.bottomColor.set( v );
+		backgroundMap.update();
 
 		ptRenderer.reset();
 
@@ -500,7 +532,7 @@ function updateCamera( cameraProjection ) {
 
 }
 
-function convertOpacityToTransmission( model ) {
+function convertOpacityToTransmission( model, ior ) {
 
 	model.traverse( c => {
 
@@ -540,6 +572,13 @@ function convertOpacityToTransmission( model ) {
 
 				newMaterial.opacity = 1.0;
 				newMaterial.transmission = 1.0;
+				newMaterial.ior = ior;
+
+				const hsl = {};
+				newMaterial.color.getHSL( hsl );
+				hsl.l = Math.max( hsl.l, 0.35 );
+				newMaterial.color.setHSL( hsl.h, hsl.s, hsl.l );
+
 				c.material = newMaterial;
 
 			}
@@ -616,7 +655,8 @@ async function updateModel() {
 
 		if ( modelInfo.opacityToTransmission ) {
 
-			convertOpacityToTransmission( model );
+			console.log( 'model=', model );
+			convertOpacityToTransmission( model, modelInfo.ior || 1.5 );
 
 		}
 
@@ -626,7 +666,6 @@ async function updateModel() {
 
 				// set the thickness so we render the material as a volumetric object
 				c.material.thickness = 1.0;
-				c.material.side = DoubleSide;
 
 			}
 
@@ -685,11 +724,13 @@ async function updateModel() {
 		const material = ptRenderer.material;
 
 		material.bvh.updateFrom( bvh );
-		material.normalAttribute.updateFrom( geometry.attributes.normal );
-		material.tangentAttribute.updateFrom( geometry.attributes.tangent );
-		material.uvAttribute.updateFrom( geometry.attributes.uv );
+		material.attributesArray.updateFrom(
+			geometry.attributes.normal,
+			geometry.attributes.tangent,
+			geometry.attributes.uv,
+			geometry.attributes.color,
+		);
 		material.materialIndexAttribute.updateFrom( geometry.attributes.materialIndex );
-		material.colorAttribute.updateFrom( geometry.attributes.color );
 		material.textures.setTextures( renderer, 2048, 2048, textures );
 		material.materials.updateFrom( materials, textures );
 
@@ -699,12 +740,16 @@ async function updateModel() {
 
 		creditEl.innerHTML = modelInfo.credit || '';
 		creditEl.style.visibility = modelInfo.credit ? 'visible' : 'hidden';
-		params.bounces = modelInfo.bounces || 3;
-		params.floorColor = modelInfo.floorColor || '#080808';
-		params.floorRoughness = modelInfo.floorRoughness || 1.0;
-		params.floorMetalness = modelInfo.floorMetalness || 0.0;
+		params.bounces = modelInfo.bounces || 5;
+		params.floorColor = modelInfo.floorColor || '#111111';
+		params.floorRoughness = modelInfo.floorRoughness || 0.2;
+		params.floorMetalness = modelInfo.floorMetalness || 0.2;
 		params.bgGradientTop = modelInfo.gradientTop || '#111111';
 		params.bgGradientBottom = modelInfo.gradientBot || '#000000';
+
+		backgroundMap.topColor.set( params.bgGradientTop );
+		backgroundMap.bottomColor.set( params.bgGradientBottom );
+		backgroundMap.update();
 
 		buildGui();
 
@@ -722,7 +767,7 @@ async function updateModel() {
 
 	const url = modelInfo.url;
 	if ( /(gltf|glb)$/i.test( url ) ) {
-
+		console.log( 'url=', url );
 		manager.onLoad = onFinish;
 		new GLTFLoader( manager )
 			.setMeshoptDecoder( MeshoptDecoder )
@@ -730,6 +775,7 @@ async function updateModel() {
 				url,
 				gltf => {
 
+					console.log( 'gltf=', gltf );
 					model = gltf.scene;
 
 				},
@@ -747,7 +793,14 @@ async function updateModel() {
 
 	} else if ( /mpd$/i.test( url ) ) {
 
+		let failed = false;
 		manager.onProgress = ( url, loaded, total ) => {
+
+			if ( failed ) {
+
+				return;
+
+			}
 
 			const percent = Math.floor( 100 * loaded / total );
 			loadingEl.innerText = `Loading : ${ percent }%`;
@@ -764,11 +817,13 @@ async function updateModel() {
 
 					model = LDrawUtils.mergeObject( result );
 					model.rotation.set( Math.PI, 0, 0 );
+
+					const toRemove = [];
 					model.traverse( c => {
 
 						if ( c.isLineSegments ) {
 
-							c.visible = false;
+							toRemove.push( c );
 
 						}
 
@@ -779,9 +834,24 @@ async function updateModel() {
 						}
 
 					} );
+
+					toRemove.forEach( c => {
+
+						c.parent.remove( c );
+
+					} );
+
 					onFinish();
 
 				},
+				undefined,
+				err => {
+
+					failed = true;
+					loadingEl.innerText = 'Failed to load model. ' + err.message;
+
+				}
+
 			);
 
 	}

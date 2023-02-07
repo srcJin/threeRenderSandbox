@@ -1,7 +1,7 @@
-import { Matrix4, Matrix3, Color, Vector2 } from 'three';
+import { Matrix4, Vector2 } from 'three';
 import { MaterialBase } from './MaterialBase.js';
 import {
-	MeshBVHUniformStruct, FloatVertexAttributeTexture, UIntVertexAttributeTexture,
+	MeshBVHUniformStruct, UIntVertexAttributeTexture,
 	shaderStructs, shaderIntersectFunction,
 } from 'three-mesh-bvh';
 import { shaderMaterialStructs, shaderLightStruct } from '../shader/shaderStructs.js';
@@ -10,17 +10,22 @@ import { RenderTarget2DArray } from '../uniforms/RenderTarget2DArray.js';
 import { shaderMaterialSampling } from '../shader/shaderMaterialSampling.js';
 import { shaderEnvMapSampling } from '../shader/shaderEnvMapSampling.js';
 import { shaderLightSampling } from '../shader/shaderLightSampling.js';
+import { shaderSobolCommon, shaderSobolSampling } from '../shader/shaderSobolSampling.js';
 import { shaderUtils } from '../shader/shaderUtils.js';
+import { shaderLayerTexelFetchFunctions } from '../shader/shaderLayerTexelFetchFunctions.js';
+import { shaderRandFunctions } from '../shader/shaderRandFunctions.js';
 import { PhysicalCameraUniform } from '../uniforms/PhysicalCameraUniform.js';
 import { EquirectHdrInfoUniform } from '../uniforms/EquirectHdrInfoUniform.js';
 import { LightsInfoUniformStruct } from '../uniforms/LightsInfoUniformStruct.js';
 import { IESProfilesTexture } from '../uniforms/IESProfilesTexture.js';
+import { AttributesTextureArray } from '../uniforms/AttributesTextureArray.js';
 
 export class PhysicalPathTracingMaterial extends MaterialBase {
 
 	onBeforeRender() {
 
 		this.setDefine( 'FEATURE_DOF', this.physicalCamera.bokehSize === 0 ? 0 : 1 );
+		this.setDefine( 'FEATURE_BACKGROUND_MAP', this.backgroundMap ? 1 : 0 );
 
 	}
 
@@ -33,26 +38,29 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 
 			defines: {
 				FEATURE_MIS: 1,
+				FEATURE_RUSSIAN_ROULETTE: 1,
 				FEATURE_DOF: 1,
-				FEATURE_GRADIENT_BG: 0,
-				TRANSPARENT_TRAVERSALS: 5,
+				FEATURE_BACKGROUND_MAP: 0,
 				// 0 = Perspective
 				// 1 = Orthographic
 				// 2 = Equirectangular
 				CAMERA_TYPE: 0,
+
+				ATTR_NORMAL: 0,
+				ATTR_TANGENT: 1,
+				ATTR_UV: 2,
+				ATTR_COLOR: 3,
 			},
 
 			uniforms: {
 				resolution: { value: new Vector2() },
 
-				bounces: { value: 3 },
+				bounces: { value: 10 },
+				transmissiveBounces: { value: 10 },
 				physicalCamera: { value: new PhysicalCameraUniform() },
 
 				bvh: { value: new MeshBVHUniformStruct() },
-				normalAttribute: { value: new FloatVertexAttributeTexture() },
-				tangentAttribute: { value: new FloatVertexAttributeTexture() },
-				uvAttribute: { value: new FloatVertexAttributeTexture() },
-				colorAttribute: { value: new FloatVertexAttributeTexture() },
+				attributesArray: { value: new AttributesTextureArray() },
 				materialIndexAttribute: { value: new UIntVertexAttributeTexture() },
 				materials: { value: new MaterialsTexture() },
 				textures: { value: new RenderTarget2DArray().texture },
@@ -62,16 +70,16 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 				invProjectionMatrix: { value: new Matrix4() },
 				backgroundBlur: { value: 0.0 },
 				environmentIntensity: { value: 1.0 },
-				environmentRotation: { value: new Matrix3() },
+				environmentRotation: { value: new Matrix4() },
 				envMapInfo: { value: new EquirectHdrInfoUniform() },
+				backgroundMap: { value: null },
 
 				seed: { value: 0 },
 				opacity: { value: 1 },
 				filterGlossyFactor: { value: 0.0 },
 
-				bgGradientTop: { value: new Color( 0x111111 ) },
-				bgGradientBottom: { value: new Color( 0x000000 ) },
 				backgroundAlpha: { value: 1.0 },
+				sobolTexture: { value: null },
 			},
 
 			vertexShader: /* glsl */`
@@ -98,23 +106,26 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 				vec4 envMapTexelToLinear( vec4 a ) { return a; }
 				#include <common>
 
+				${ shaderRandFunctions }
+				${ shaderSobolCommon }
+				${ shaderSobolSampling }
 				${ shaderStructs }
 				${ shaderIntersectFunction }
 				${ shaderMaterialStructs }
 				${ shaderLightStruct }
 
+				${ shaderLayerTexelFetchFunctions }
 				${ shaderUtils }
 				${ shaderMaterialSampling }
 				${ shaderEnvMapSampling }
 
-				uniform mat3 environmentRotation;
+				uniform mat4 environmentRotation;
 				uniform float backgroundBlur;
 				uniform float backgroundAlpha;
 
-				#if FEATURE_GRADIENT_BG
+				#if FEATURE_BACKGROUND_MAP
 
-				uniform vec3 bgGradientTop;
-				uniform vec3 bgGradientBottom;
+				uniform sampler2D backgroundMap;
 
 				#endif
 
@@ -126,12 +137,10 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 
 				uniform vec2 resolution;
 				uniform int bounces;
+				uniform int transmissiveBounces;
 				uniform mat4 cameraWorldMatrix;
 				uniform mat4 invProjectionMatrix;
-				uniform sampler2D normalAttribute;
-				uniform sampler2D tangentAttribute;
-				uniform sampler2D uvAttribute;
-				uniform sampler2D colorAttribute;
+				uniform sampler2DArray attributesArray;
 				uniform usampler2D materialIndexAttribute;
 				uniform BVH bvh;
 				uniform float environmentIntensity;
@@ -161,20 +170,16 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 
 				}
 
-				vec3 sampleBackground( vec3 direction ) {
+				vec3 sampleBackground( vec3 direction, vec2 uv ) {
 
-					#if FEATURE_GRADIENT_BG
+					vec3 sampleDir = normalize( direction + getHemisphereSample( direction, uv ) * 0.5 * backgroundBlur );
 
-					direction = normalize( direction + randDirection() * 0.05 );
+					#if FEATURE_BACKGROUND_MAP
 
-					float value = ( direction.y + 1.0 ) / 2.0;
-					value = pow( value, 2.0 );
-
-					return mix( bgGradientBottom, bgGradientTop, value );
+					return sampleEquirectEnvMapColor( sampleDir, backgroundMap );
 
 					#else
 
-					vec3 sampleDir = normalize( direction + getHemisphereSample( direction, rand2() ) * 0.5 * backgroundBlur );
 					return environmentIntensity * sampleEquirectEnvMapColor( sampleDir, envMapInfo.map );
 
 					#endif
@@ -182,7 +187,7 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 				}
 
 				// step through multiple surface hits and accumulate color attenuation based on transmissive surfaces
-				bool attenuateHit( BVH bvh, vec3 rayOrigin, vec3 rayDirection, int traversals, bool isShadowRay, out vec3 color ) {
+				bool attenuateHit( BVH bvh, vec3 rayOrigin, vec3 rayDirection, int traversals, int transparentTraversals, bool isShadowRay, out vec3 color ) {
 
 					// hit results
 					uvec4 faceIndices = uvec4( 0u );
@@ -193,6 +198,8 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 
 					color = vec3( 1.0 );
 
+					// TODO: we should be using sobol sampling here instead of rand but the sobol bounce and path indices need to be incremented
+					// and then reset.
 					for ( int i = 0; i < traversals; i ++ ) {
 
 						if ( bvhIntersectFirstHit( bvh, rayOrigin, rayDirection, faceIndices, faceNormal, barycoord, side, dist ) ) {
@@ -201,8 +208,9 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 							// Should be able to work using the material BSDF functions which will take into account specularity, etc.
 							// TODO: should we account for emissive surfaces here?
 
-							vec2 uv = textureSampleBarycoord( uvAttribute, barycoord, faceIndices.xyz ).xy;
-							vec4 vertexColor = textureSampleBarycoord( colorAttribute, barycoord, faceIndices.xyz );
+							vec2 uv = textureSampleBarycoord( attributesArray, ATTR_UV, barycoord, faceIndices.xyz ).xy;
+							vec4 vertexColor = textureSampleBarycoord( attributesArray, ATTR_COLOR, barycoord, faceIndices.xyz );
+
 							uint materialIndex = uTexelFetch1D( materialIndexAttribute, faceIndices.x ).r;
 							Material material = readMaterialInfo( materials, materialIndex );
 
@@ -293,6 +301,15 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 
 							}
 
+							bool isTransmissiveRay = dot( rayDirection, faceNormal * side ) < 0.0;
+							if ( ( isTransmissiveRay || isBelowSurface ) && transparentTraversals > 0 ) {
+
+								transparentTraversals --;
+								i --;
+
+							}
+
+
 						} else {
 
 							return false;
@@ -318,14 +335,6 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 
 				}
 
-				// tentFilter from Peter Shirley's 'Realistic Ray Tracing (2nd Edition)' book, pg. 60
-				// erichlof/THREE.js-PathTracing-Renderer/
-				float tentFilter( float x ) {
-
-					return x < 0.5 ? sqrt( 2.0 * x ) - 1.0 : 1.0 - sqrt( 2.0 - ( 2.0 * x ) );
-
-				}
-
 				vec3 ndcToRayOrigin( vec2 coord ) {
 
 					vec4 rayOrigin4 = cameraWorldMatrix * invProjectionMatrix * vec4( coord, - 1.0, 1.0 );
@@ -337,13 +346,13 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 					vec2 ssd = vec2( 1.0 ) / resolution;
 
 					// Jitter the camera ray by finding a uv coordinate at a random sample
-					// around this pixel's UV coordinate
-					vec2 jitteredUv = vUv + vec2( tentFilter( rand() ) * ssd.x, tentFilter( rand() ) * ssd.y );
+					// around this pixel's UV coordinate for AA
+					vec2 ruv = sobol2( 0 );
+					vec2 jitteredUv = vUv + vec2( tentFilter( ruv.x ) * ssd.x, tentFilter( ruv.y ) * ssd.y );
 
 					#if CAMERA_TYPE == 2
 
 						// Equirectangular projection
-
 						vec4 rayDirection4 = vec4( equirectUvToDirection( jitteredUv ), 0.0 );
 						vec4 rayOrigin4 = vec4( 0.0, 0.0, 0.0, 1.0 );
 
@@ -357,20 +366,17 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 
 						// get [- 1, 1] normalized device coordinates
 						vec2 ndc = 2.0 * jitteredUv - vec2( 1.0 );
-
 						rayOrigin = ndcToRayOrigin( ndc );
 
 						#if CAMERA_TYPE == 1
 
 							// Orthographic projection
-
 							rayDirection = ( cameraWorldMatrix * vec4( 0.0, 0.0, - 1.0, 0.0 ) ).xyz;
 							rayDirection = normalize( rayDirection );
 
 						#else
 
 							// Perspective projection
-
 							rayDirection = normalize( mat3(cameraWorldMatrix) * ( invProjectionMatrix * vec4( ndc, 0.0, 1.0 ) ).xyz );
 
 						#endif
@@ -384,17 +390,17 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 						vec3 focalPoint = rayOrigin + normalize( rayDirection ) * physicalCamera.focusDistance;
 
 						// get the aperture sample
-						vec2 apertureSample = sampleAperture( physicalCamera.apertureBlades ) * physicalCamera.bokehSize * 0.5 * 1e-3;
+						// if blades === 0 then we assume a circle
+						vec3 shapeUVW= sobol3( 1 );
+						int blades = physicalCamera.apertureBlades;
+						float anamorphicRatio = physicalCamera.anamorphicRatio;
+						vec2 apertureSample = blades == 0 ? sampleCircle( shapeUVW.xy ) : sampleRegularNGon( blades, shapeUVW );
+						apertureSample *= physicalCamera.bokehSize * 0.5 * 1e-3;
 
 						// rotate the aperture shape
-						float ac = cos( physicalCamera.apertureRotation );
-						float as = sin( physicalCamera.apertureRotation );
-						apertureSample = vec2(
-							apertureSample.x * ac - apertureSample.y * as,
-							apertureSample.x * as + apertureSample.y * ac
-						);
-						apertureSample.x *= saturate( physicalCamera.anamorphicRatio );
-						apertureSample.y *= saturate( 1.0 / physicalCamera.anamorphicRatio );
+						apertureSample =
+							rotateVector( apertureSample, physicalCamera.apertureRotation ) *
+							saturate( vec2( anamorphicRatio, 1.0 / anamorphicRatio ) );
 
 						// create the new ray
 						rayOrigin += ( cameraWorldMatrix * vec4( apertureSample, 0.0, 0.0 ) ).xyz;
@@ -410,6 +416,8 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 				void main() {
 
 					rng_initialize( gl_FragCoord.xy, seed );
+					sobolPixelIndex = ( uint( gl_FragCoord.x ) << 16 ) | ( uint( gl_FragCoord.y ) );
+					sobolPathIndex = uint( seed );
 
 					vec3 rayDirection;
 					vec3 rayOrigin;
@@ -417,7 +425,8 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 					getCameraRay( rayDirection, rayOrigin );
 
 					// inverse environment rotation
-					mat3 invEnvironmentRotation = inverse( environmentRotation );
+					mat3 envRotation3x3 = mat3( environmentRotation );
+					mat3 invEnvRotation3x3 = inverse( envRotation3x3 );
 
 					// final color
 					gl_FragColor = vec4( 0.0 );
@@ -434,7 +443,7 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 					float accumulatedRoughness = 0.0;
 					float accumulatedClearcoatRoughness = 0.0;
 					bool transmissiveRay = true;
-					int transparentTraversals = TRANSPARENT_TRAVERSALS;
+					int transparentTraversals = transmissiveBounces;
 					vec3 throughputColor = vec3( 1.0 );
 					SampleRec sampleRec;
 					int i;
@@ -442,13 +451,15 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 
 					for ( i = 0; i < bounces; i ++ ) {
 
-						bool hit = bvhIntersectFirstHit( bvh, rayOrigin, rayDirection, faceIndices, faceNormal, barycoord, side, dist );
+						sobolBounceIndex ++;
 
+						bool hit = bvhIntersectFirstHit( bvh, rayOrigin, rayDirection, faceIndices, faceNormal, barycoord, side, dist );
+						bool firstRay = i == 0 && transparentTraversals == transmissiveBounces;
 						LightSampleRec lightHit = lightsClosestHit( lights.tex, lights.count, rayOrigin, rayDirection );
 
-						if ( lightHit.hit && ( lightHit.dist < dist || !hit ) ) {
+						if ( lightHit.hit && ( lightHit.dist < dist || ! hit ) ) {
 
-							if ( i == 0 || transmissiveRay ) {
+							if ( firstRay || transmissiveRay ) {
 
 								gl_FragColor.rgb += lightHit.emission * throughputColor;
 
@@ -456,9 +467,8 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 
 								#if FEATURE_MIS
 
-								// NOTE: we skip MIS for spotlights since we haven't fixed the forward
-								// path tracing code path, yet
-								if ( lightHit.type == SPOT_LIGHT_TYPE ) {
+								// NOTE: we skip MIS for punctual lights since they are not supported in forward PT case
+								if ( lightHit.type == SPOT_LIGHT_TYPE || lightHit.type == DIR_LIGHT_TYPE || lightHit.type == POINT_LIGHT_TYPE ) {
 
 									gl_FragColor.rgb += lightHit.emission * throughputColor;
 
@@ -483,9 +493,9 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 
 						if ( ! hit ) {
 
-							if ( i == 0 || transmissiveRay ) {
+							if ( firstRay || transmissiveRay ) {
 
-								gl_FragColor.rgb += sampleBackground( environmentRotation * rayDirection ) * throughputColor;
+								gl_FragColor.rgb += sampleBackground( envRotation3x3 * rayDirection, sobol2( 2 ) ) * throughputColor;
 								gl_FragColor.a = backgroundAlpha;
 
 							} else {
@@ -494,7 +504,7 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 
 								// get the PDF of the hit envmap point
 								vec3 envColor;
-								float envPdf = envMapSample( environmentRotation * rayDirection, envMapInfo, envColor );
+								float envPdf = sampleEnvMap( envMapInfo, envRotation3x3 * rayDirection, envColor );
 								envPdf /= float( lights.count + 1u );
 
 								// and weight the contribution
@@ -505,7 +515,7 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 
 								gl_FragColor.rgb +=
 									environmentIntensity *
-									sampleEquirectEnvMapColor( environmentRotation * rayDirection, envMapInfo.map ) *
+									sampleEquirectEnvMapColor( envRotation3x3 * rayDirection, envMapInfo.map ) *
 									throughputColor;
 
 								#endif
@@ -518,7 +528,7 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 						uint materialIndex = uTexelFetch1D( materialIndexAttribute, faceIndices.x ).r;
 						Material material = readMaterialInfo( materials, materialIndex );
 
-						if ( material.matte && i == 0 ) {
+						if ( material.matte && firstRay ) {
 
 							gl_FragColor = vec4( 0.0 );
 							break;
@@ -539,8 +549,8 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 						}
 
 						// uv coord for textures
-						vec2 uv = textureSampleBarycoord( uvAttribute, barycoord, faceIndices.xyz ).xy;
-						vec4 vertexColor = textureSampleBarycoord( colorAttribute, barycoord, faceIndices.xyz );
+						vec2 uv = textureSampleBarycoord( attributesArray, ATTR_UV, barycoord, faceIndices.xyz ).xy;
+						vec4 vertexColor = textureSampleBarycoord( attributesArray, ATTR_COLOR, barycoord, faceIndices.xyz );
 
 						// albedo
 						vec4 albedo = vec4( material.color, material.opacity );
@@ -579,7 +589,7 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 							|| useAlphaTest && albedo.a < alphaTest
 
 							// opacity
-							|| material.transparent && ! useAlphaTest && albedo.a < rand()
+							|| material.transparent && ! useAlphaTest && albedo.a < sobol( 3 )
 						) {
 
 							vec3 point = rayOrigin + rayDirection * dist;
@@ -597,7 +607,8 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 
 						// fetch the interpolated smooth normal
 						vec3 normal = normalize( textureSampleBarycoord(
-							normalAttribute,
+							attributesArray,
+							ATTR_NORMAL,
 							barycoord,
 							faceIndices.xyz
 						).xyz );
@@ -639,11 +650,21 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 						}
 
 						// normal
+						if ( material.flatShading ) {
+
+							// if we're rendering a flat shaded object then use the face normals - the face normal
+							// is provided based on the side the ray hits the mesh so flip it to align with the
+							// interpolated vertex normals.
+							normal = faceNormal * side;
+
+						}
+
 						vec3 baseNormal = normal;
 						if ( material.normalMap != - 1 ) {
 
 							vec4 tangentSample = textureSampleBarycoord(
-								tangentAttribute,
+								attributesArray,
+								ATTR_TANGENT,
 								barycoord,
 								faceIndices.xyz
 							);
@@ -681,7 +702,7 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 						if ( material.clearcoatRoughnessMap != - 1 ) {
 
 							vec3 uvPrime = material.clearcoatRoughnessMapTransform * vec3( uv, 1 );
-							clearcoat *= texture2D( textures, vec3( uvPrime.xy, material.clearcoatRoughnessMap ) ).g;
+							clearcoatRoughness *= texture2D( textures, vec3( uvPrime.xy, material.clearcoatRoughnessMap ) ).g;
 
 						}
 
@@ -690,7 +711,8 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 						if ( material.clearcoatNormalMap != - 1 ) {
 
 							vec4 tangentSample = textureSampleBarycoord(
-								tangentAttribute,
+								attributesArray,
+								ATTR_TANGENT,
 								barycoord,
 								faceIndices.xyz
 							);
@@ -798,7 +820,8 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 						// frontFace is used to determine transmissive properties and PDF. If no transmission is used
 						// then we can just always assume this is a front face.
 						surfaceRec.frontFace = side == 1.0 || transmission == 0.0;
-						surfaceRec.iorRatio = material.thinFilm || surfaceRec.frontFace ? 1.0 / material.ior : material.ior;
+						surfaceRec.eta = material.thinFilm || surfaceRec.frontFace ? 1.0 / material.ior : material.ior;
+						surfaceRec.f0 = iorRatioToF0( surfaceRec.eta );
 						surfaceRec.thinFilm = material.thinFilm;
 
 						// Compute the filtered roughness value to use during specular reflection computations.
@@ -818,7 +841,8 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 						vec3 clearcoatOutgoing = - normalize( clearcoatInvBasis * rayDirection );
 						sampleRec = bsdfSample( outgoing, clearcoatOutgoing, normalBasis, invBasis, clearcoatNormalBasis, clearcoatInvBasis, surfaceRec );
 
-						isShadowRay = sampleRec.specularPdf < rand();
+						bool wasBelowSurface = dot( rayDirection, faceNormal ) > 0.0;
+						isShadowRay = sampleRec.specularPdf < sobol( 4 );
 
 						// adjust the hit point by the surface normal by a factor of some offset and the
 						// maximum component-wise value of the current point to accommodate floating point
@@ -835,10 +859,10 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 						#if FEATURE_MIS
 
 						// uniformly pick a light or environment map
-						if( rand() > 1.0 / float( lights.count + 1u ) ) {
+						if( sobol( 5 ) > 1.0 / float( lights.count + 1u ) ) {
 
 							// sample a light or environment
-							LightSampleRec lightSampleRec = randomLightSample( lights.tex, iesProfiles, lights.count, rayOrigin );
+							LightSampleRec lightSampleRec = randomLightSample( lights.tex, iesProfiles, lights.count, rayOrigin, sobol3( 6 ) );
 
 							bool isSampleBelowSurface = dot( faceNormal, lightSampleRec.direction ) < 0.0;
 							if ( isSampleBelowSurface ) {
@@ -862,7 +886,7 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 
 									// weight the direct light contribution
 									float lightPdf = lightSampleRec.pdf / float( lights.count + 1u );
-									float misWeight = misHeuristic( lightPdf, lightMaterialPdf );
+									float misWeight = lightSampleRec.type == SPOT_LIGHT_TYPE || lightSampleRec.type == DIR_LIGHT_TYPE || lightSampleRec.type == POINT_LIGHT_TYPE ? 1.0 : misHeuristic( lightPdf, lightMaterialPdf );
 									gl_FragColor.rgb += lightSampleRec.emission * throughputColor * sampleColor * misWeight / lightPdf;
 
 								}
@@ -873,8 +897,8 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 
 							// find a sample in the environment map to include in the contribution
 							vec3 envColor, envDirection;
-							float envPdf = randomEnvMapSample( envMapInfo, envColor, envDirection );
-							envDirection = invEnvironmentRotation * envDirection;
+							float envPdf = sampleEnvMapProbability( envMapInfo, sobol2( 7 ), envColor, envDirection );
+							envDirection = invEnvRotation3x3 * envDirection;
 
 							// this env sampling is not set up for transmissive sampling and yields overly bright
 							// results so we ignore the sample in this case.
@@ -891,7 +915,7 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 							if (
 								envPdf > 0.0 &&
 								isDirectionValid( envDirection, normal, faceNormal ) &&
-								! attenuateHit( bvh, rayOrigin, envDirection, bounces - i, isShadowRay, attenuatedColor )
+								! attenuateHit( bvh, rayOrigin, envDirection, bounces - i, transparentTraversals, isShadowRay, attenuatedColor )
 							) {
 
 								// get the material pdf
@@ -927,6 +951,16 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 
 						}
 
+						// if we're bouncing around the inside a transmissive material then decrement
+						// perform this separate from a bounce
+						bool isTransmissiveRay = dot( rayDirection, faceNormal * side ) < 0.0;
+						if ( ( isTransmissiveRay || isBelowSurface ) && transparentTraversals > 0 ) {
+
+							transparentTraversals --;
+							i --;
+
+						}
+
 						// accumulate color
 						gl_FragColor.rgb += ( emission * throughputColor );
 
@@ -936,6 +970,29 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 							break;
 
 						}
+
+						#if FEATURE_RUSSIAN_ROULETTE
+
+						// russian roulette path termination
+						// https://www.arnoldrenderer.com/research/physically_based_shader_design_in_arnold.pdf
+						uint minBounces = 3u;
+						float depthProb = float( sobolBounceIndex < minBounces );
+
+						float rrProb = luminance( throughputColor * sampleRec.color / sampleRec.pdf );
+						rrProb /= luminance( throughputColor );
+						rrProb = sqrt( rrProb );
+						rrProb = max( rrProb, depthProb );
+						rrProb = min( rrProb, 1.0 );
+						if ( sobol( 8 ) > rrProb ) {
+
+							break;
+
+						}
+
+						// perform sample clamping here to avoid bright pixels
+						throughputColor *= min( 1.0 / rrProb, 20.0 );
+
+						#endif
 
 						throughputColor *= sampleRec.color / sampleRec.pdf;
 
@@ -952,6 +1009,7 @@ export class PhysicalPathTracingMaterial extends MaterialBase {
 							break;
 
 						}
+
 
 					}
 
