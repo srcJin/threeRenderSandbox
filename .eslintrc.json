@@ -12,8 +12,8 @@
 				"ignoreReadBeforeAssign": false
 			}
 		],
-		"quotes": [ "error", "single" ],
-		"indent": [ "error", "tab" ],
+		"quotes": [ ],
+		"indent": [ ],
 		"no-var": [ "error" ]
 	}
 }

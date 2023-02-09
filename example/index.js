@@ -17,6 +17,7 @@ import {
 	MeshBasicMaterial,
 	sRGBEncoding,
 	CustomBlending,
+	ColorKeyframeTrack,
 } from 'three';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
@@ -30,47 +31,10 @@ import { PathTracingSceneWorker } from '../src/workers/PathTracingSceneWorker.js
 import { PhysicalPathTracingMaterial, PathTracingRenderer, MaterialReducer, BlurredEnvMapGenerator, GradientEquirectTexture } from '../src/index.js';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import {presets,envMaps} from './presets.js';
 
-const envMaps = {
-	'Royal Esplanade': 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/equirectangular/royal_esplanade_1k.hdr',
-	'Moonless Golf': 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/equirectangular/moonless_golf_1k.hdr',
-	'Overpass': 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/equirectangular/pedestrian_overpass_1k.hdr',
-	'Venice Sunset': 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/equirectangular/venice_sunset_1k.hdr',
-	'Small Studio': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/studio_small_05_1k.hdr',
-	'Pfalzer Forest': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/phalzer_forest_01_1k.hdr',
-	'Leadenhall Market': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/leadenhall_market_1k.hdr',
-	'Kloppenheim': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/kloppenheim_05_1k.hdr',
-	'Hilly Terrain': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/hilly_terrain_01_1k.hdr',
-	'Circus Arena': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/circus_arena_1k.hdr',
-	'Chinese Garden': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/chinese_garden_1k.hdr',
-	'Autoshop': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/autoshop_01_1k.hdr',
 
-	'Measuring Lab': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/vintage_measuring_lab_2k.hdr',
-	'Whale Skeleton': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/whale_skeleton_2k.hdr',
-	'Hall of Mammals': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/hall_of_mammals_2k.hdr',
-
-	'Drachenfels Cellar': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/drachenfels_cellar_2k.hdr',
-	'Adams Place Bridge': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/adams_place_bridge_2k.hdr',
-	'Sepulchral Chapel Rotunda': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/sepulchral_chapel_rotunda_2k.hdr',
-	'Peppermint Powerplant': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/peppermint_powerplant_2k.hdr',
-	'Noon Grass': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/noon_grass_2k.hdr',
-	'Narrow Moonlit Road': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/narrow_moonlit_road_2k.hdr',
-	'St Peters Square Night': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/st_peters_square_night_2k.hdr',
-	'Brown Photostudio 01': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/brown_photostudio_01_2k.hdr',
-	'Rainforest Trail': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/rainforest_trail_2k.hdr',
-	'Brown Photostudio 07': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/brown_photostudio_07_2k.hdr',
-	'Brown Photostudio 06': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/brown_photostudio_06_2k.hdr',
-	'Dancing Hall': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/dancing_hall_2k.hdr',
-	'Aristea Wreck Puresky': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/aristea_wreck_puresky_2k.hdr',
-	'Modern Buildings 2': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/modern_buildings_2_2k.hdr',
-	'Thatch Chapel': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/thatch_chapel_2k.hdr',
-	'Vestibule': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/vestibule_2k.hdr',
-	'Blocky Photo Studio': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/blocky_photo_studio_1k.hdr',
-	'Christmas Photo Studio 07': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/christmas_photo_studio_07_2k.hdr',
-	'Aerodynamics Workshop': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/aerodynamics_workshop_1k.hdr',
-
-};
-
+// console.log(envMaps['Dusk 1']);
 const models = window.MODEL_LIST || {};
 
 let initialModel = Object.keys( models )[ 0 ];
@@ -85,31 +49,36 @@ if ( window.location.hash ) {
 
 }
 
-const params = {
+console.log('presets=',presets);
 
+const params = {
+	style : "Morning",
 	multipleImportanceSampling: true,
 	acesToneMapping: true,
-	resolutionScale: 1 / window.devicePixelRatio,
+	// resolutionScale: 1 / window.devicePixelRatio,
+	resolutionScale: 0.5,
+
 	tilesX: 2,
 	tilesY: 2,
 	samplesPerFrame: 1,
 
 	model: initialModel,
 
-	envMap: envMaps[ 'Aristea Wreck Puresky' ],
+	envMap: envMaps[ 'Dusk 1' ],
 
 	gradientTop: '#bfd8ff',
 	gradientBottom: '#ffffff',
 
 	environmentIntensity: 1.0,
 	environmentBlur: 0.0,
-	environmentRotation: 0,
+	environmentRotationY: 0,
+	environmentRotationZ: 0,
 
 	cameraProjection: 'Perspective',
 
 	backgroundType: 'Gradient',
-	bgGradientTop: '#111111',
-	bgGradientBottom: '#000000',
+	bgGradientTop: '#c6e1ff',
+	bgGradientBottom: '#ffffff',
 	backgroundAlpha: 1.0,
 	checkerboardTransparency: true,
 
@@ -118,12 +87,15 @@ const params = {
 	filterGlossyFactor: 0.5,
 	pause: false,
 
-	floorColor: '#111111',
+	floorColor: '#494949',
 	floorOpacity: 1.0,
-	floorRoughness: 0.2,
-	floorMetalness: 0.2,
+	floorRoughness: 1.0,
+	floorMetalness: 0.0,
 
+	radius: 1.0
 };
+
+
 
 let creditEl, loadingEl, samplesEl;
 let floorPlane, gui, stats, sceneInfo;
@@ -151,8 +123,8 @@ async function init() {
 	scene = new Scene();
 
 	const aspect = window.innerWidth / window.innerHeight;
-	perspectiveCamera = new PerspectiveCamera( 60, aspect, 0.025, 500 );
-	perspectiveCamera.position.set( - 1, 0.25, 1 );
+	perspectiveCamera = new PerspectiveCamera( 60, aspect, 0.025, 5000 );
+	perspectiveCamera.position.set( - 0.75, 0.5, 0.75 );
 
 	const orthoHeight = orthoWidth / aspect;
 	orthoCamera = new OrthographicCamera( orthoWidth / - 2, orthoWidth / 2, orthoHeight / 2, orthoHeight / - 2, 0, 100 );
@@ -189,13 +161,16 @@ async function init() {
 			map: floorTex,
 			transparent: true,
 			color: 0x111111,
-			roughness: 0.1,
+			roughness: 1.0,
 			metalness: 0.0,
 			side: DoubleSide,
 		} )
 	);
 	floorPlane.scale.setScalar( 5 );
 	floorPlane.rotation.x = - Math.PI / 2;
+	// floorPlane.position.y = 100;
+
+	console.log( 'floorPlane= ', floorPlane )
 
 	stats = new Stats();
 	document.body.appendChild( stats.dom );
@@ -319,9 +294,52 @@ function buildGui() {
 
 	}
 
+
 	gui = new GUI();
 
+
+	// gui.remember(params);
 	gui.add( params, 'model', Object.keys( models ) ).onChange( updateModel );
+	gui.add( params, 'style',[ 'Morning', 'Noon', 'Sunset', 'Night', 'Nature', 'Studio' ] ).onChange( v => {
+		for (object in presets[v]){
+			console.log(object)
+			params[object] = presets[v][object]
+		}
+		// params = presets[v]
+		// refresh everything
+		ptRenderer.material.setDefine( 'FEATURE_MIS', Number( params['multipleImportanceSampling'] ) );
+		renderer.toneMapping = params['acesToneMapping'] ? ACESFilmicToneMapping : NoToneMapping;
+		onResize();
+		ptRenderer.tiles.x = params.tilesX;
+		ptRenderer.tiles.y = params.tilesY;
+		updateCamera( params['cameraProjection'] );
+		updateEnvMap();
+		updateEnvBlur();
+		ptRenderer.material.environmentRotation.makeRotationY( params.environmentRotationY );
+		ptRenderer.material.environmentRotation.makeRotationZ( params.environmentRotationZ );
+
+		if ( params.backgroundType === 'Gradient' ) {
+			scene.background = backgroundMap;
+			ptRenderer.material.backgroundMap = backgroundMap;
+		} else {
+			scene.background = scene.environment;
+			ptRenderer.material.backgroundMap = null;
+		}
+		backgroundMap.topColor.set( params.bgGradientTop );
+		backgroundMap.topColor.set( params.bgGradientBottom );
+		ptRenderer.material.backgroundAlpha = params.backgroundAlpha
+
+		if ( params.checkerboardTransparency ) document.body.classList.add( 'checkerboard' );
+		else document.body.classList.remove( 'checkerboard' );
+
+		ptRenderer.reset();
+
+		buildGui()
+		console.log('changing style');
+	}
+);
+
+
 
 	const pathTracingFolder = gui.addFolder( 'path tracing' );
 	pathTracingFolder.add( params, 'enable' );
@@ -385,9 +403,15 @@ function buildGui() {
 		ptRenderer.reset();
 
 	} ).name( 'intensity' );
-	environmentFolder.add( params, 'environmentRotation', 0, 2 * Math.PI ).onChange( v => {
+	environmentFolder.add( params, 'environmentRotationY', 0, 2 * Math.PI ).onChange( v => {
 
 		ptRenderer.material.environmentRotation.makeRotationY( v );
+		ptRenderer.reset();
+
+	} );
+	environmentFolder.add( params, 'environmentRotationZ', 0, 2 * Math.PI ).onChange( v => {
+
+		ptRenderer.material.environmentRotation.makeRotationZ( v );
 		ptRenderer.reset();
 
 	} );
@@ -461,7 +485,14 @@ function buildGui() {
 		ptRenderer.reset();
 
 	} );
-	floorFolder.close();
+	floorFolder.open();
+
+	const MaterialFolder = gui.addFolder( 'Material' );
+	MaterialFolder.add( params, 'radius', 0, 4 ).onChange( () => {
+
+		ptRenderer.reset();
+
+	} );
 
 }
 
