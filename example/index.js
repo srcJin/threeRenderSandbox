@@ -20,7 +20,7 @@ import {
 	ColorKeyframeTrack,
 	Vector3,
 	Color,
-	SpotLight
+	DirectionalLight
 } from 'three';
 // import * as THREE from 'three';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
@@ -37,6 +37,7 @@ import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {presets,envMaps} from './presets.js';
 import { ShapedAreaLight } from '../src/index.js';
+import { FirstPersonControls } from 'three/examples/jsm/controls/FirstPersonControls.js';
 // console.log(envMaps['Dusk 1']);
 const models = window.MODEL_LIST || {};
 
@@ -112,16 +113,13 @@ const params = {
 	areaLight1Y:0,
 	areaLight1Z:0,
 
-	spotLight1Enabled: false,
-	spotLight1Intensity: 200,
-	spotLight1Color: '#ffffff',
-	spotLight1Angle: Math.PI/3,
-	spotLight1Distance: 0.5,
-	spotLightCastShadow : true,
-	spotLightExponent: 0.1,
-	spotLight1X:0,
-	spotLight1Y:0,
-	spotLight1Z:0,
+	directionalLight1Enabled: false,
+	directionalLight1Intensity: 200,
+	directionalLight1Color: '#ffffff',
+	directionalLight1CastShadow : true,
+	directionalLight1X:0,
+	directionalLight1Y:0,
+	directionalLight1Z:0,
 
 	// AO
 	radius: 1.0
@@ -138,7 +136,7 @@ let ptRenderer, fsQuad, controls, scene;
 let envMap, envMapGenerator, backgroundMap;
 let loadingModel = false;
 let delaySamples = 0;
-let areaLights = [], spotLights =[], enabledLights
+let areaLights = [], directionalLights =[], enabledLights
 
 const orthoWidth = 2;
 
@@ -192,7 +190,11 @@ async function init() {
 	} ) );
 
 	controls = new OrbitControls( perspectiveCamera, renderer.domElement );
-	controls.addEventListener( 'change', resetRenderer );
+	// first person not working
+	// controls = new FirstPersonControls( perspectiveCamera, renderer.domElement );
+	// controls.addEventListener( 'change', resetRenderer );
+	// controls.movementSpeed = 150;
+	// controls.lookSpeed = 0.1;
 
 	envMapGenerator = new BlurredEnvMapGenerator( renderer );
 
@@ -224,16 +226,16 @@ async function init() {
 	areaLight1.rotateZ( - Math.PI / 4 );
 	areaLight1.rotateX( - Math.PI / 2 );
 	areaLight1.isCircular = true;
-	scene.add( areaLight1 );
+	// scene.add( areaLight1 );
 	areaLights.push(areaLight1)
 
-	const spotLight1 = new SpotLight( new Color( 0xFFFFFF ), 5.0, 1.0, 1.0 );
-	spotLight1.position.x = 1.5;
-	spotLight1.position.y = 2.0;
-	spotLight1.position.z = -0.5;
+	const directionalLight1 = new DirectionalLight( new Color( 0xFFFFFF ), 0.5 );
+	directionalLight1.position.x = 1.5;
+	directionalLight1.position.y = 2.0;
+	directionalLight1.position.z = -0.5;
 
-	scene.add( spotLight1 );
-	spotLights.push(spotLight1)
+	// scene.add( directionalLight1 );
+	directionalLights.push(directionalLight1)
 
 	stats = new Stats();
 	document.body.appendChild( stats.dom );
@@ -415,17 +417,14 @@ function buildGui() {
 	areaLight1Folder.add( params, 'areaLight1Y', 0,3.14).name ('Axis 2').onChange(updateLights);
 
 
-	const spotLight1Folder = gui.addFolder( 'Spot Light 1' );
-	spotLight1Folder.add( params, 'spotLight1Enabled' ).name( 'enable_2' ).onChange( updateLights );
-	spotLight1Folder.add( params, 'spotLightCastShadow' ).name( 'CastShadow' ).onChange( updateLights );
-	spotLight1Folder.add( params, 'spotLight1Intensity', 0, 200 ).name( 'intensity' ).onChange( updateLights );
-	spotLight1Folder.addColor( params, 'areaLight1Color' ).name( 'color' ).onChange( updateLights );
-	spotLight1Folder.add( params, 'spotLight1Angle', 0, 5 ).name( 'angle' ).onChange( updateLights );
-	spotLight1Folder.add( params, 'spotLight1Distance', 0, 5 ).name( 'distance' ).onChange( updateLights );
-	
-	spotLight1Folder.add( params, 'spotLight1X', -3.14,3.14).name ('Axis 1_2').onChange(updateLights);
-	spotLight1Folder.add( params, 'spotLight1Y',  0,3.14).name ('Axis 2_2').onChange(updateLights);
-	spotLight1Folder.close()
+	const directionalLight1Folder = gui.addFolder( 'directional Light 1' );
+	directionalLight1Folder.add( params, 'directionalLight1Enabled' ).name( 'enable_2' ).onChange( updateLights );
+	directionalLight1Folder.add( params, 'directionalLight1CastShadow' ).name( 'CastShadow' ).onChange( updateLights );
+	directionalLight1Folder.add( params, 'directionalLight1Intensity', 0, 200 ).name( 'intensity' ).onChange( updateLights );
+	directionalLight1Folder.addColor( params, 'directionalLight1Color' ).name( 'color' ).onChange( updateLights );	
+	directionalLight1Folder.add( params, 'directionalLight1X', -3.14,3.14).name ('Axis 1_2').onChange(updateLights);
+	directionalLight1Folder.add( params, 'directionalLight1Y',  0,3.14).name ('Axis 2_2').onChange(updateLights);
+	directionalLight1Folder.close()
 
 	updateLights();
 
@@ -441,37 +440,34 @@ function buildGui() {
 		areaLights[ 0 ].color.set( params.areaLight1Color ).convertSRGBToLinear();
 		areaLights[ 0 ].lookAt( 0, 0, 0 )
 
-		spotLights[ 0 ].intensity = params.areaLight1Intensity;
-		spotLights[ 0 ].angle = params.spotLight1Angle;
-		spotLights[ 0 ].distance = params.spotLight1Distance;
-		spotLights[ 0 ].color.set( params.spotLight1Color ).convertSRGBToLinear();
-		spotLights[ 0 ].castShadow = params.spotLightCastShadow
-		spotLights[ 0 ].exponent = params.spotLightExponent
+		directionalLights[ 0 ].intensity = params.directionalLight1Intensity;
+		directionalLights[ 0 ].color.set( params.directionalLight1Color ).convertSRGBToLinear();
+		directionalLights[ 0 ].castShadow = params.directionalLight1CastShadow
 
 
 		var pt = [0,0,1]
 		var pt2 = rotatePt(pt[0],pt[2], params.areaLight1X) // check conversion from three.js
 		var pt3 = rotatePt(pt2[0],pt[1], params.areaLight1Y)
 
-		var pt2_2 = rotatePt(pt[0],pt[2], params.spotLight1X) // check conversion from three.js
-		var pt3_2 = rotatePt(pt2_2[0],pt[1], params.spotLight1Y)
+		var pt2_2 = rotatePt(pt[0],pt[2], params.directionalLight1X) // check conversion from three.js
+		var pt3_2 = rotatePt(pt2_2[0],pt[1], params.directionalLight1Y)
 
 		let newAreaLightPosition = new Vector3(pt3[0], pt3[1], pt2[1])
-		let newSpotLightPosition = new Vector3(pt3_2[0], pt3_2[1], pt2_2[1])
+		let newDirectionalLightPosition = new Vector3(pt3_2[0], pt3_2[1], pt2_2[1])
 
 		areaLights[ 0 ].position.x = newAreaLightPosition.x;
 		areaLights[ 0 ].position.y = newAreaLightPosition.y;
 		areaLights[ 0 ].position.z = newAreaLightPosition.z;
 
-		spotLights[ 0 ].position.x = newSpotLightPosition.x;
-		spotLights[ 0 ].position.y = newSpotLightPosition.y;
-		spotLights[ 0 ].position.z = newSpotLightPosition.z;
+		directionalLights[ 0 ].position.x = newDirectionalLightPosition.x;
+		directionalLights[ 0 ].position.y = newDirectionalLightPosition.y;
+		directionalLights[ 0 ].position.z = newDirectionalLightPosition.z;
 
 		enabledLights = [];
 
 		if ( params.areaLight1Enabled ) enabledLights.push( areaLights[ 0 ] );
-		if ( params.spotLight1Enabled ) enabledLights.push( spotLights[ 0 ] );
-		spotLights[ 0 ].visible = (params.spotLight1Enabled) ? true : false
+		if ( params.directionalLight1Enabled ) enabledLights.push( directionalLights[ 0 ] );
+		directionalLights[ 0 ].visible = (params.directionalLight1Enabled) ? true : false
 
 		console.log("enabledLights",enabledLights);
 		ptRenderer.material.lights.updateFrom( enabledLights );
@@ -650,7 +646,7 @@ function buildGui() {
 	} );
 
 	const cameraFolder = gui.addFolder( 'PhysicalCamera' );
-	cameraFolder.add( physicalCamera, 'focusDistance', 1, 100 ).onChange( ptRenderer.reset() ).listen();
+	cameraFolder.add( physicalCamera, 'focusDistance', 0.1, 5 ).onChange( ptRenderer.reset() ).listen();
 	cameraFolder.add( physicalCamera, 'apertureBlades', 0, 10, 1 ).onChange( function ( v ) {
 
 		physicalCamera.apertureBlades = v === 0 ? 0 : Math.max( v, 3 );
