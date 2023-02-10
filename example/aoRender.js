@@ -163,7 +163,7 @@ async function init() {
 	const gui = new GUI();
 	gui.add( params, 'resolutionScale', 0.1, 1 ).onChange( onResize );
 	gui.add( params, 'samplesPerFrame', 1, 10, 1 );
-	gui.add( params, 'AOradius', 0, 4 ).onChange( reset );
+	gui.add( params, 'radius', 0, 4 ).onChange( reset );
 	gui.add( params, 'accumulate' ).onChange( reset );
 	gui.add( params, 'pause' );
 

@@ -19,6 +19,7 @@ import {
 	CustomBlending,
 	ColorKeyframeTrack,
 	Vector3,
+	Color,
 } from 'three';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
@@ -33,8 +34,8 @@ import { PhysicalPathTracingMaterial, PathTracingRenderer, PhysicalCamera, Mater
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {presets,envMaps} from './presets.js';
-
-
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
+import { ShapedAreaLight } from '../src/index.js';
 // console.log(envMaps['Dusk 1']);
 const models = window.MODEL_LIST || {};
 
@@ -98,8 +99,19 @@ const params = {
 	// Depth of Field
 	autoFocus: true,
 
+	// Manual Lights
+	controls: true,
+	areaLight1Enabled: true,
+	areaLight1IsCircular: false,
+	areaLight1Intensity: 2,
+	areaLight1Color: '#ffffff',
+	areaLight1Width: 1,
+	areaLight1Height: 1,
+
 	// AO
 	radius: 1.0
+
+
 };
 
 
@@ -111,6 +123,8 @@ let ptRenderer, fsQuad, controls, scene;
 let envMap, envMapGenerator, backgroundMap;
 let loadingModel = false;
 let delaySamples = 0;
+let areaLights = [], enabledLights
+let transformControls, transformControlsScene
 
 const orthoWidth = 2;
 
@@ -180,11 +194,39 @@ async function init() {
 			side: DoubleSide,
 		} )
 	);
+
 	floorPlane.scale.setScalar( 5 );
 	floorPlane.rotation.x = - Math.PI / 2;
 	// floorPlane.position.y = 100;
 
 	console.log( 'floorPlane= ', floorPlane )
+
+	transformControls = new TransformControls( activeCamera, renderer.domElement );
+
+	// area light
+	transformControls.addEventListener( 'objectChange', () => {
+
+		ptRenderer.material.lights.updateFrom( areaLights );
+		
+		ptRenderer.reset();
+
+	} );
+
+	const areaLight1 = new ShapedAreaLight( new Color( 0xFFFFFF ), 5.0, 1.0, 1.0 );
+	areaLight1.position.x = 1.5;
+	areaLight1.position.y = 1.0;
+	areaLight1.position.z = - 0.5;
+	areaLight1.rotateZ( - Math.PI / 4 );
+	areaLight1.rotateX( - Math.PI / 2 );
+	areaLight1.isCircular = false;
+	scene.add( areaLight1 );
+	areaLights.push(areaLight1)
+
+	// light control
+	scene.add(transformControls)
+	transformControls.addEventListener( 'dragging-changed', ( e ) => controls.enabled = ! e.value );
+	transformControls.attach( areaLight1 );
+	transformControls.setSize( 0.5 );
 
 	stats = new Stats();
 	document.body.appendChild( stats.dom );
@@ -354,6 +396,39 @@ function buildGui() {
 		refreshAll(v)
 	}
 );
+
+	gui.add( params, 'controls' ).onChange( v => {
+
+		transformControls.enabled = v;
+		transformControls.visible = v;
+
+	} );
+
+	const areaLight1Folder = gui.addFolder( 'Area Light 1' );
+	areaLight1Folder.add( params, 'areaLight1Enabled' ).name( 'enable' ).onChange( updateLights );
+	areaLight1Folder.add( params, 'areaLight1IsCircular' ).name( 'isCircular' ).onChange( updateLights );
+	areaLight1Folder.add( params, 'areaLight1Intensity', 0, 200 ).name( 'intensity' ).onChange( updateLights );
+	areaLight1Folder.addColor( params, 'areaLight1Color' ).name( 'color' ).onChange( updateLights );
+	areaLight1Folder.add( params, 'areaLight1Width', 0, 5 ).name( 'width' ).onChange( updateLights );
+	areaLight1Folder.add( params, 'areaLight1Height', 0, 5 ).name( 'height' ).onChange( updateLights );
+	
+	updateLights();
+
+	function updateLights() {
+
+		areaLights[ 0 ].isCircular = params.areaLight1IsCircular;
+		areaLights[ 0 ].intensity = params.areaLight1Intensity;
+		areaLights[ 0 ].width = params.areaLight1Width;
+		areaLights[ 0 ].height = params.areaLight1Height;
+		areaLights[ 0 ].color.set( params.areaLight1Color ).convertSRGBToLinear();
+	
+		enabledLights = [];
+		if ( params.areaLight1Enabled ) enabledLights.push( areaLights[ 0 ] );
+	
+		ptRenderer.material.lights.updateFrom( enabledLights );
+		ptRenderer.reset();
+	
+	}
 
 
 	const pathTracingFolder = gui.addFolder( 'path tracing' );

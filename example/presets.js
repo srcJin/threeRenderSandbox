@@ -20,7 +20,8 @@ export const envMaps = {
 	'Modern Buildings 2': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/modern_buildings_2_2k.hdr',
 	'Blocky Photo Studio': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/blocky_photo_studio_1k.hdr',
 	'Christmas Photo Studio 07': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/christmas_photo_studio_07_2k.hdr',
-	// 'Aerodynamics Workshop': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/aerodynamics_workshop_1k.hdr',
+	'ShangHai Bund Night': 'http://dl.dropboxusercontent.com/s/496udjgikxj44kz/shanghai_bund_1k.hdr',
+    // 'Aerodynamics Workshop': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/aerodynamics_workshop_1k.hdr',
 	// 'Measuring Lab': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/vintage_measuring_lab_2k.hdr',
 	// 'St Peters Square Night': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/st_peters_square_night_2k.hdr',
 	// 'Thatch Chapel': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/thatch_chapel_2k.hdr',
@@ -45,44 +46,40 @@ export const envMaps = {
 	// 'Kloppenheim': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/kloppenheim_05_1k.hdr',
 };
 
-
 export const presets = {
     "Morning" : {
         "style" : "Morning",
-        "multipleImportanceSampling": true,
-        "acesToneMapping": true,
-        // resolutionScale: 1 / window.devicePixelRatio,
-        "resolutionScale": 0.5,
-    
-        "tilesX": 2,
-        "tilesY": 2,
-        "samplesPerFrame": 1,
-    
-        "model": "initialModel",
-    
-        "envMap": envMaps['Noon 1'],
+        "envMap": envMaps['Low Sun 1'],
     
         "gradientTop": "#bfd8ff",
         "gradientBottom": "#ffffff",
-    
-        "environmentIntensity": 1.0,
-        "environmentBlur": 0.0,
-        "environmentRotationY": 0,
-        "environmentRotationZ": 0,
-    
         "cameraProjection": "Perspective",
-    
         "backgroundType": "Environment",
         "bgGradientTop": "#c6e1ff",
         "bgGradientBottom": "#ffffff",
         "backgroundAlpha": 1.0,
-        "checkerboardTransparency": true,
+        "checkerboardTransparency": false,
+
+        "floorColor": "#494949",
+        "floorOpacity": 1.0,
+        "floorRoughness": 1.0,
+        "floorMetalness": 0.0,
     
-        "enable": true,
-        "bounces": 5,
-        "filterGlossyFactor": 0.5,
-        "pause": false,
+        "radius": 1.0
+    },
+    "Noon" : {
+        "style" : "Morning",
+        "envMap": envMaps['Noon 1'],
     
+        "gradientTop": "#bfd8ff",
+        "gradientBottom": "#ffffff",
+        "cameraProjection": "Perspective",
+        "backgroundType": "Environment",
+        "bgGradientTop": "#c6e1ff",
+        "bgGradientBottom": "#ffffff",
+        "backgroundAlpha": 1.0,
+        "checkerboardTransparency": false,
+
         "floorColor": "#494949",
         "floorOpacity": 1.0,
         "floorRoughness": 1.0,
@@ -92,39 +89,82 @@ export const presets = {
     },
     "Sunset" : {
         "style" : "Sunset",
-        "multipleImportanceSampling": true,
-        "acesToneMapping": true,
-        // resolutionScale: 1 / window.devicePixelRatio,
-        "resolutionScale": 0.5,
-    
-        "tilesX": 2,
-        "tilesY": 2,
-        "samplesPerFrame": 1,
-    
-        "model": "initialModel",
-    
         "envMap": envMaps['Sunset 1'],
     
         "gradientTop": "#b1d8aa",
         "gradientBottom": "#faafff",
-    
-        "environmentIntensity": 1.0,
-        "environmentBlur": 0.0,
-        "environmentRotationY": 0,
-        "environmentRotationZ": 0,
-    
         "cameraProjection": "Perspective",
-    
         "backgroundType": "Environment",
         "bgGradientTop": "#c6e1aa",
         "bgGradientBottom": "#ffbbff",
         "backgroundAlpha": 1.0,
-        "checkerboardTransparency": true,
+        "checkerboardTransparency": false,
     
-        "enable": true,
-        "bounces": 5,
-        "filterGlossyFactor": 0.5,
-        "pause": false,
+        "floorColor": "#494949",
+        "floorOpacity": 1.0,
+        "floorRoughness": 1.0,
+        "floorMetalness": 0.0,
+    
+        "radius": 1.0
+    },
+    "Night" : {
+        "style" : "Night",
+        "model": "initialModel",
+        "envMap": envMaps['ShangHai Bund Night'],
+    
+        "gradientTop": "#3f4552",
+        "gradientBottom": "#818181",
+        "cameraProjection": "Perspective",
+        "backgroundType": "Environment",
+        "bgGradientTop": "#313131",
+        "bgGradientBottom": "#7d7d7d",
+        "backgroundAlpha": 1.0,
+        "checkerboardTransparency": false,
+    
+        "floorColor": "#494949",
+        "floorOpacity": 1.0,
+        "floorRoughness": 1.0,
+        "floorMetalness": 0.0,
+    
+        "radius": 1.0
+    },
+    "Nature" : {
+        "style" : "Nature",
+        "model": "initialModel",
+        "envMap": envMaps['Noon Grass'],
+        "gradientTop": "#3f4552",
+        "gradientBottom": "#818181",
+        "cameraProjection": "Perspective",
+        "backgroundType": "Environment",
+        "bgGradientTop": "#313131",
+        "bgGradientBottom": "#7d7d7d",
+        "backgroundAlpha": 1.0,
+        "checkerboardTransparency": false,
+    
+        "floorColor": "#494949",
+        "floorOpacity": 1.0,
+        "floorRoughness": 1.0,
+        "floorMetalness": 0.0,
+    
+        "radius": 1.0
+    },
+    "Studio Axio" : {
+        "style" : "Studio",
+
+        "model": "initialModel",
+    
+        "envMap": envMaps['Small Studio'],
+    
+        "gradientTop": "#b1d8aa",
+        "gradientBottom": "#faafff",
+    
+        "cameraProjection": "Orthographic",
+    
+        "backgroundType": "Gradient",
+        "bgGradientTop": "#c7c7c7",
+        "bgGradientBottom": "#585858",
+        "backgroundAlpha": 1.0,
+        "checkerboardTransparency": false,
     
         "floorColor": "#494949",
         "floorOpacity": 1.0,
@@ -133,5 +173,4 @@ export const presets = {
     
         "radius": 1.0
     }
-   
 }
