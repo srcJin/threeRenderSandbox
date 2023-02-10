@@ -19,10 +19,7 @@ import {
 	CustomBlending,
 	ColorKeyframeTrack,
 	Vector3,
-	Color,
-	SpotLight
 } from 'three';
-// import * as THREE from 'three';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -36,7 +33,8 @@ import { PhysicalPathTracingMaterial, PathTracingRenderer, PhysicalCamera, Mater
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {presets,envMaps} from './presets.js';
-import { ShapedAreaLight } from '../src/index.js';
+
+
 // console.log(envMaps['Dusk 1']);
 const models = window.MODEL_LIST || {};
 
@@ -100,33 +98,8 @@ const params = {
 	// Depth of Field
 	autoFocus: true,
 
-	// Manual Area Lights
-	controls: true,
-	areaLight1Enabled: false,
-	areaLight1IsCircular: true,
-	areaLight1Intensity: 100,
-	areaLight1Color: '#ffffff',
-	areaLight1Width: 0.5,
-	areaLight1Height: 0.5,
-	areaLight1X:0,
-	areaLight1Y:0,
-	areaLight1Z:0,
-
-	spotLight1Enabled: false,
-	spotLight1Intensity: 200,
-	spotLight1Color: '#ffffff',
-	spotLight1Angle: Math.PI/3,
-	spotLight1Distance: 0.5,
-	spotLightCastShadow : true,
-	spotLightExponent: 0.1,
-	spotLight1X:0,
-	spotLight1Y:0,
-	spotLight1Z:0,
-
 	// AO
 	radius: 1.0
-
-
 };
 
 
@@ -138,7 +111,6 @@ let ptRenderer, fsQuad, controls, scene;
 let envMap, envMapGenerator, backgroundMap;
 let loadingModel = false;
 let delaySamples = 0;
-let areaLights = [], spotLights =[], enabledLights
 
 const orthoWidth = 2;
 
@@ -208,32 +180,11 @@ async function init() {
 			side: DoubleSide,
 		} )
 	);
-
 	floorPlane.scale.setScalar( 5 );
 	floorPlane.rotation.x = - Math.PI / 2;
 	// floorPlane.position.y = 100;
 
 	console.log( 'floorPlane= ', floorPlane )
-
-
-
-	const areaLight1 = new ShapedAreaLight( new Color( 0xFFFFFF ), 5.0, 1.0, 1.0 );
-	areaLight1.position.x = 1.5;
-	areaLight1.position.y = 2.0;
-	areaLight1.position.z = - 0.5;
-	areaLight1.rotateZ( - Math.PI / 4 );
-	areaLight1.rotateX( - Math.PI / 2 );
-	areaLight1.isCircular = true;
-	scene.add( areaLight1 );
-	areaLights.push(areaLight1)
-
-	const spotLight1 = new SpotLight( new Color( 0xFFFFFF ), 5.0, 1.0, 1.0 );
-	spotLight1.position.x = 1.5;
-	spotLight1.position.y = 2.0;
-	spotLight1.position.z = -0.5;
-
-	scene.add( spotLight1 );
-	spotLights.push(spotLight1)
 
 	stats = new Stats();
 	document.body.appendChild( stats.dom );
@@ -398,95 +349,11 @@ function buildGui() {
 	gui = new GUI();
 	// gui.remember(params);
 	gui.add( params, 'model', Object.keys( models ) ).onChange( updateEnvMap );
+	gui.add( params, 'envMap' ).name( 'HDRI URL' ).onChange( updateModel );
 	gui.add( params, 'style',Object.keys(presets) ).onChange( v => {
 		refreshAll(v)
 	}
 );
-
-
-	const areaLight1Folder = gui.addFolder( 'Area Light 1' );
-	areaLight1Folder.add( params, 'areaLight1Enabled' ).name( 'enable' ).onChange( updateLights );
-	areaLight1Folder.add( params, 'areaLight1IsCircular' ).name( 'isCircular' ).onChange( updateLights );
-	areaLight1Folder.add( params, 'areaLight1Intensity', 0, 400 ).name( 'intensity' ).onChange( updateLights );
-	areaLight1Folder.addColor( params, 'areaLight1Color' ).name( 'color' ).onChange( updateLights );
-	areaLight1Folder.add( params, 'areaLight1Width', 0, 5 ).name( 'width' ).onChange( updateLights );
-	areaLight1Folder.add( params, 'areaLight1Height', 0, 5 ).name( 'height' ).onChange( updateLights );
-	areaLight1Folder.add( params, 'areaLight1X', -3.14,3.14).name ('Axis 1').onChange(updateLights);
-	areaLight1Folder.add( params, 'areaLight1Y', 0,3.14).name ('Axis 2').onChange(updateLights);
-
-
-	const spotLight1Folder = gui.addFolder( 'Spot Light 1' );
-	spotLight1Folder.add( params, 'spotLight1Enabled' ).name( 'enable_2' ).onChange( updateLights );
-	spotLight1Folder.add( params, 'spotLightCastShadow' ).name( 'CastShadow' ).onChange( updateLights );
-	spotLight1Folder.add( params, 'spotLight1Intensity', 0, 200 ).name( 'intensity' ).onChange( updateLights );
-	spotLight1Folder.addColor( params, 'areaLight1Color' ).name( 'color' ).onChange( updateLights );
-	spotLight1Folder.add( params, 'spotLight1Angle', 0, 5 ).name( 'angle' ).onChange( updateLights );
-	spotLight1Folder.add( params, 'spotLight1Distance', 0, 5 ).name( 'distance' ).onChange( updateLights );
-	
-	spotLight1Folder.add( params, 'spotLight1X', -3.14,3.14).name ('Axis 1_2').onChange(updateLights);
-	spotLight1Folder.add( params, 'spotLight1Y',  0,3.14).name ('Axis 2_2').onChange(updateLights);
-	spotLight1Folder.close()
-
-	updateLights();
-
-	function updateLights() {
-
-		// rotate the light around a pivot
-		// https://jsfiddle.net/tfoller/pyawcqxk/15/
-
-		areaLights[ 0 ].isCircular = params.areaLight1IsCircular;
-		areaLights[ 0 ].intensity = params.areaLight1Intensity;
-		areaLights[ 0 ].width = params.areaLight1Width;
-		areaLights[ 0 ].height = params.areaLight1Height;
-		areaLights[ 0 ].color.set( params.areaLight1Color ).convertSRGBToLinear();
-		areaLights[ 0 ].lookAt( 0, 0, 0 )
-
-		spotLights[ 0 ].intensity = params.areaLight1Intensity;
-		spotLights[ 0 ].angle = params.spotLight1Angle;
-		spotLights[ 0 ].distance = params.spotLight1Distance;
-		spotLights[ 0 ].color.set( params.spotLight1Color ).convertSRGBToLinear();
-		spotLights[ 0 ].castShadow = params.spotLightCastShadow
-		spotLights[ 0 ].exponent = params.spotLightExponent
-
-
-		var pt = [0,0,1]
-		var pt2 = rotatePt(pt[0],pt[2], params.areaLight1X) // check conversion from three.js
-		var pt3 = rotatePt(pt2[0],pt[1], params.areaLight1Y)
-
-		var pt2_2 = rotatePt(pt[0],pt[2], params.spotLight1X) // check conversion from three.js
-		var pt3_2 = rotatePt(pt2_2[0],pt[1], params.spotLight1Y)
-
-		let newAreaLightPosition = new Vector3(pt3[0], pt3[1], pt2[1])
-		let newSpotLightPosition = new Vector3(pt3_2[0], pt3_2[1], pt2_2[1])
-
-		areaLights[ 0 ].position.x = newAreaLightPosition.x;
-		areaLights[ 0 ].position.y = newAreaLightPosition.y;
-		areaLights[ 0 ].position.z = newAreaLightPosition.z;
-
-		spotLights[ 0 ].position.x = newSpotLightPosition.x;
-		spotLights[ 0 ].position.y = newSpotLightPosition.y;
-		spotLights[ 0 ].position.z = newSpotLightPosition.z;
-
-		enabledLights = [];
-
-		if ( params.areaLight1Enabled ) enabledLights.push( areaLights[ 0 ] );
-		if ( params.spotLight1Enabled ) enabledLights.push( spotLights[ 0 ] );
-		spotLights[ 0 ].visible = (params.spotLight1Enabled) ? true : false
-
-		console.log("enabledLights",enabledLights);
-		ptRenderer.material.lights.updateFrom( enabledLights );
-		ptRenderer.reset();
-
-		function rotatePt(px, py, angle){
-
-			var nx = px * Math.cos(angle) - py * Math.sin(angle);
-			var ny = py * Math.cos(angle) + px * Math.sin(angle);
-			return [nx, ny]
-	
-	  }
-	
-	
-	}
 
 
 	const pathTracingFolder = gui.addFolder( 'path tracing' );
@@ -546,14 +413,13 @@ function buildGui() {
 
 	const environmentFolder = gui.addFolder( 'environment' );
 	environmentFolder.add( params, 'envMap', envMaps ).name( 'map' ).onChange( updateEnvMap );
-	environmentFolder.add( params, 'envMap' ).name( 'HDRI URL' ).onChange( updateModel );
 	environmentFolder.add( params, 'environmentBlur', 0.0, 1.0 ).onChange( () => {
 
 		updateEnvBlur();
 		ptRenderer.reset();
 
 	} ).name( 'env map blur' );
-	environmentFolder.add( params, 'environmentIntensity', 0.0, 5.0 ).onChange( () => {
+	environmentFolder.add( params, 'environmentIntensity', 0.0, 10.0 ).onChange( () => {
 
 		ptRenderer.reset();
 
@@ -935,9 +801,6 @@ async function updateModel() {
 
 		sceneInfo = result;
 		scene.add( sceneInfo.scene );
-
-
-
 
 		const { bvh, textures, materials } = result;
 		const geometry = bvh.geometry;
