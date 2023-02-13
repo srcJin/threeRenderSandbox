@@ -399,7 +399,7 @@ function buildGui() {
 
 	gui = new GUI();
 	// gui.remember(params);
-	gui.add( params, 'model', Object.keys( models ) ).onChange( updateEnvMap );
+	gui.add( params, 'model', Object.keys( models ) ).onChange( updateModel);
 	gui.add( params, 'style',Object.keys(presets) ).onChange( v => {
 		refreshAll(v)
 	}
@@ -542,7 +542,7 @@ function buildGui() {
 
 	const environmentFolder = gui.addFolder( 'environment' );
 	environmentFolder.add( params, 'envMap', envMaps ).name( 'map' ).onChange( updateEnvMap );
-	environmentFolder.add( params, 'envMap' ).name( 'HDRI URL' ).onChange( updateModel );
+	environmentFolder.add( params, 'envMap' ).name( 'HDRI URL' ).onChange( updateEnvMap );
 	environmentFolder.add( params, 'environmentBlur', 0.0, 1.0 ).onChange( () => {
 
 		updateEnvBlur();
