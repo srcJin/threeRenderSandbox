@@ -192,7 +192,7 @@ async function init() {
 	controls = new OrbitControls( perspectiveCamera, renderer.domElement );
 	// first person not working
 	// controls = new FirstPersonControls( perspectiveCamera, renderer.domElement );
-	// controls.addEventListener( 'change', resetRenderer );
+	controls.addEventListener( 'change', resetRenderer );
 	// controls.movementSpeed = 150;
 	// controls.lookSpeed = 0.1;
 
