@@ -57,7 +57,7 @@ console.log('presets=',presets);
 
 const focusPoint = new Vector3();
 
-const params = {
+let params = {
 	style : "Morning",
 	multipleImportanceSampling: true,
 	acesToneMapping: true,
@@ -80,7 +80,7 @@ const params = {
 	environmentRotationY: 0,
 	environmentRotationZ: 0,
 
-	cameraProjection: 'Perspective',
+	cameraProjection: 'Physical',
 
 	backgroundType: 'Gradient',
 	bgGradientTop: '#c6e1ff',
@@ -98,14 +98,21 @@ const params = {
 	floorRoughness: 1.0,
 	floorMetalness: 0.0,
 
-	// Depth of Field
-	autoFocus: true,
+	// Physical Camera
+	autoFocus: false,
+	focusDistance: 0.1,
+	apertureBlades: 6,
+	apertureRotation: 0,
+	anamorphicRatio: 5 ,
+	bokehSize: 0.1 ,
+	fStop: 30 ,
+	fov: 60,
 
 	// Manual Area Lights
 	controls: true,
 	areaLight1Enabled: false,
 	areaLight1IsCircular: true,
-	areaLight1Intensity: 100,
+	areaLight1Intensity: 10,
 	areaLight1Color: '#ffffff',
 	areaLight1Width: 0.5,
 	areaLight1Height: 0.5,
@@ -114,7 +121,7 @@ const params = {
 	areaLight1Z:0,
 
 	directionalLight1Enabled: false,
-	directionalLight1Intensity: 200,
+	directionalLight1Intensity: 10,
 	directionalLight1Color: '#ffffff',
 	directionalLight1CastShadow : true,
 	directionalLight1X:0,
@@ -164,11 +171,13 @@ async function init() {
 	orthoCamera.position.set( - 1, 0.25, 1 );
 
 	physicalCamera = new PhysicalCamera( 60, window.innerWidth / window.innerHeight, 0.025, 500 );
-	physicalCamera.position.set( - 0.262, 0.5276, - 1.1606 );
+	// For takanaka
+	physicalCamera.position.set( 0.09471368035116058, -0.07481969711971605, 0.05960608982822937 );
+	// physicalCamera.position.set( -0.01, 0.001, 0.01 );
 	physicalCamera.apertureBlades = 6;
-	physicalCamera.fStop = 0.6;
-	physicalCamera.focusDistance = 1.1878;
-	focusPoint.set( - 0.5253353217832674, 0.3031596413506029, 0.000777794185259223 );
+	physicalCamera.fStop = 20;
+	physicalCamera.focusDistance = 0.055;
+	focusPoint.set( 0, 0, 0 );
 
 	backgroundMap = new GradientEquirectTexture();
 	backgroundMap.topColor.set( params.bgGradientTop );
@@ -351,6 +360,36 @@ function onResize() {
 
 }
 
+// saved parameters, a global variable
+let saved = {}
+let savedGui = {}
+let data
+function downloadJson(exportObj, exportName){
+    let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObj));
+    let downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", exportName + ".json");
+    downloadAnchorNode.click();
+}
+
+function loadJson() {
+	let input = document.createElement('input');
+	input.type = 'file';
+	input.accept = '.json';
+	input.addEventListener('change', function(event) {
+		let file = event.target.files[0];
+		let reader = new FileReader();
+		reader.onload = function(event) {
+		data = JSON.parse(event.target.result);
+		console.log(data);
+			};
+		reader.readAsText(file);
+	});
+	input.click();
+	return data
+}
+
+
 function buildGui() {
 
 	if ( gui ) {
@@ -398,9 +437,38 @@ function buildGui() {
 	}
 
 	gui = new GUI();
-	// gui.remember(params);
-	gui.add( params, 'model', Object.keys( models ) ).onChange( updateModel);
-	gui.add( params, 'style',Object.keys(presets) ).onChange( v => {
+	const folderParams = { 
+		save() { 
+			saved = params;
+			savedGui = gui.save();
+			console.log( 'save', saved );
+			downloadJson(saved, 'params');
+			downloadJson(savedGui, 'gui');
+
+			},
+
+		load(){
+			let load = loadJson();
+			console.log( 'load=',load);
+			for (object in load){
+				console.log(object);
+				params[object] = load[object]
+			}
+		}
+	}
+
+	const saveLoadFolder = gui.addFolder( 'Save/Load' );
+	saveLoadFolder.add( folderParams, 'save' );
+	saveLoadFolder.add( folderParams, 'load' );
+	saveLoadFolder.close();
+
+
+	const GeneralFolder = gui.addFolder( 'General' );
+
+	GeneralFolder.add( params, 'model', Object.keys( models ) ).onChange( updateModel);
+	GeneralFolder.add( params, 'model' ).name( 'Model URL' ).onFinishChange( updateModel );
+
+	GeneralFolder.add( params, 'style',Object.keys(presets) ).onChange( v => {
 		refreshAll(v)
 	}
 );
@@ -542,7 +610,7 @@ function buildGui() {
 
 	const environmentFolder = gui.addFolder( 'environment' );
 	environmentFolder.add( params, 'envMap', envMaps ).name( 'map' ).onChange( updateEnvMap );
-	environmentFolder.add( params, 'envMap' ).name( 'HDRI URL' ).onChange( updateEnvMap );
+	environmentFolder.add( params, 'envMap' ).name( 'HDRI URL' ).onFinishChange( updateEnvMap );
 	environmentFolder.add( params, 'environmentBlur', 0.0, 1.0 ).onChange( () => {
 
 		updateEnvBlur();
@@ -646,25 +714,26 @@ function buildGui() {
 	} );
 
 	const cameraFolder = gui.addFolder( 'PhysicalCamera' );
-	cameraFolder.add( physicalCamera, 'focusDistance', 0.1, 5 ).onChange( ptRenderer.reset() ).listen();
+	cameraFolder.add( physicalCamera, 'focusDistance', 0.0001, 5 ).onChange( ptRenderer.reset() ).listen();
 	cameraFolder.add( physicalCamera, 'apertureBlades', 0, 10, 1 ).onChange( function ( v ) {
 
 		physicalCamera.apertureBlades = v === 0 ? 0 : Math.max( v, 3 );
 		this.updateDisplay();
+		refreshAll(v) 
 		ptRenderer.reset();
 
 	} );
 	cameraFolder.add( physicalCamera, 'apertureRotation', 0, 12.5 ).onChange( ptRenderer.reset() );
 	cameraFolder.add( physicalCamera, 'anamorphicRatio', 0.1, 10.0 ).onChange( ptRenderer.reset() );
-	cameraFolder.add( physicalCamera, 'bokehSize', 0, 100 ).onChange( ptRenderer.reset() ).listen();
-	cameraFolder.add( physicalCamera, 'fStop', 0.02, 20 ).onChange( ptRenderer.reset() ).listen();
+	cameraFolder.add( physicalCamera, 'bokehSize', 0, 500 ).onChange( ptRenderer.reset() ).listen();
+	cameraFolder.add( physicalCamera, 'fStop', 0.02, 100 ).onChange( ptRenderer.reset() ).listen();
 	cameraFolder.add( physicalCamera, 'fov', 25, 100 ).onChange( () => {
 
 		physicalCamera.updateProjectionMatrix();
 		ptRenderer.reset();
 	} ).listen();
 	cameraFolder.add( params, 'autoFocus' );
-	cameraFolder.hide()
+	// cameraFolder.hide()
 }
 
 function updateEnvMap() {
@@ -735,10 +804,9 @@ function updateCamera( cameraProjection ) {
 		activeCamera = orthoCamera;
 
 	}
-
+	console.log("activeCamera.position=",activeCamera.position);
 	controls.object = activeCamera;
 	ptRenderer.camera = activeCamera;
-
 	controls.update();
 
 	resetRenderer();
@@ -903,7 +971,6 @@ async function updateModel() {
 		model.position
 			.addScaledVector( box.min, - 0.5 )
 			.addScaledVector( box.max, - 0.5 );
-
 		const sphere = new Sphere();
 		box.getBoundingSphere( sphere );
 
@@ -915,7 +982,8 @@ async function updateModel() {
 		model.updateMatrixWorld();
 
 		const group = new Group();
-		floorPlane.position.y = box.min.y;
+		// changed to fit DBF model
+		floorPlane.position.y = box.min.y+0.00125;
 		group.add( model, floorPlane );
 
 		const reducer = new MaterialReducer();
@@ -947,7 +1015,7 @@ async function updateModel() {
 			geometry.attributes.color,
 		);
 		material.materialIndexAttribute.updateFrom( geometry.attributes.materialIndex );
-		material.textures.setTextures( renderer, 2048, 2048, textures );
+		material.textures.setTextures( renderer, 1024, 1024, textures );
 		material.materials.updateFrom( materials, textures );
 
 		generator.dispose();
@@ -957,9 +1025,9 @@ async function updateModel() {
 		creditEl.innerHTML = modelInfo.credit || '';
 		creditEl.style.visibility = modelInfo.credit ? 'visible' : 'hidden';
 		params.bounces = modelInfo.bounces || 5;
-		params.floorColor = modelInfo.floorColor || '#111111';
-		params.floorRoughness = modelInfo.floorRoughness || 0.2;
-		params.floorMetalness = modelInfo.floorMetalness || 0.2;
+		params.floorColor = modelInfo.floorColor || '#3f3f3f';
+		params.floorRoughness = modelInfo.floorRoughness || 1.0;
+		params.floorMetalness = modelInfo.floorMetalness || 0.0;
 		params.bgGradientTop = modelInfo.gradientTop || '#111111';
 		params.bgGradientBottom = modelInfo.gradientBot || '#000000';
 
