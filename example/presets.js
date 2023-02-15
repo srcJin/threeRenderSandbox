@@ -46,6 +46,32 @@ export const envMaps = {
 	// 'Kloppenheim': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/kloppenheim_05_1k.hdr',
 };
 
+
+export const qualities = {
+    "Draft" : {
+        "Quality" : "Draft",
+
+        "resolutionScale":0.5,
+        "bounces" : 2,
+        "targetSamples" : 50,
+
+
+    },
+    "Middle" : {
+        "Quality" : "Middle",
+        "resolutionScale":0.75,
+        "bounces" : 3,
+        "targetSamples" : 200,
+
+    },
+    "High" :{
+        "Quality" : "High",
+        "resolutionScale":1,
+        "bounces" : 5,
+        "targetSamples" : 500,
+    }
+}
+
 export const presets = {
     "Morning" : {
         "style" : "Morning",

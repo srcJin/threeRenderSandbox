@@ -35,7 +35,7 @@ import { PathTracingSceneWorker } from '../src/workers/PathTracingSceneWorker.js
 import { PhysicalPathTracingMaterial, PathTracingRenderer, PhysicalCamera, MaterialReducer, BlurredEnvMapGenerator, GradientEquirectTexture } from '../src/index.js';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import {presets,envMaps} from './presets.js';
+import {presets,envMaps,qualities} from './presets.js';
 import { ShapedAreaLight } from '../src/index.js';
 import { FirstPersonControls } from 'three/examples/jsm/controls/FirstPersonControls.js';
 // console.log(envMaps['Dusk 1']);
@@ -129,9 +129,8 @@ let params = {
 	directionalLight1Z:0,
 
 	// AO
-	radius: 1.0
-
-
+	radius: 1.0, 
+	targetSamples : 200
 };
 
 
@@ -171,9 +170,8 @@ async function init() {
 	orthoCamera.position.set( - 1, 0.25, 1 );
 
 	physicalCamera = new PhysicalCamera( 60, window.innerWidth / window.innerHeight, 0.025, 500 );
-	// For takanaka
-	physicalCamera.position.set( 0.09471368035116058, -0.07481969711971605, 0.05960608982822937 );
-	// physicalCamera.position.set( -0.01, 0.001, 0.01 );
+	// physicalCamera.position.set( 0.5, 0.5, 0.5 );
+	physicalCamera.position.set( -0.1, 0.001, 0.1 );
 	physicalCamera.apertureBlades = 6;
 	physicalCamera.fStop = 20;
 	physicalCamera.focusDistance = 0.055;
@@ -287,7 +285,7 @@ function animate() {
 
 	}
 
-	if ( params.enable && delaySamples === 0 ) {
+	if ( params.enable && delaySamples === 0 && ptRenderer.samples <= params.targetSamples ) {
 
 		const samples = Math.floor( ptRenderer.samples );
 		samplesEl.innerText = `samples: ${ samples }`;
@@ -381,7 +379,7 @@ function loadJson() {
 		let reader = new FileReader();
 		reader.onload = function(event) {
 		data = JSON.parse(event.target.result);
-		console.log(data);
+		console.log("loadJson()=", data);
 			};
 		reader.readAsText(file);
 	});
@@ -398,62 +396,20 @@ function buildGui() {
 
 	}
 
-	function refreshAll(v) {
-		for (object in presets[v]){
-			console.log(object)
-			params[object] = presets[v][object]
-		}
-		// params = presets[v]
-		// refresh everything
-		ptRenderer.material.setDefine( 'FEATURE_MIS', Number( params['multipleImportanceSampling'] ) );
-		renderer.toneMapping = params['acesToneMapping'] ? ACESFilmicToneMapping : NoToneMapping;
-		onResize();
-		ptRenderer.tiles.x = params.tilesX;
-		ptRenderer.tiles.y = params.tilesY;
-		updateCamera( params['cameraProjection'] );
-		updateEnvMap();
-		updateEnvBlur();
-		ptRenderer.material.environmentRotation.makeRotationY( params.environmentRotationY );
-		ptRenderer.material.environmentRotation.makeRotationZ( params.environmentRotationZ );
-
-		if ( params.backgroundType === 'Gradient' ) {
-			scene.background = backgroundMap;
-			ptRenderer.material.backgroundMap = backgroundMap;
-		} else {
-			scene.background = scene.environment;
-			ptRenderer.material.backgroundMap = null;
-		}
-		backgroundMap.topColor.set( params.bgGradientTop );
-		backgroundMap.topColor.set( params.bgGradientBottom );
-		ptRenderer.material.backgroundAlpha = params.backgroundAlpha
-
-		if ( params.checkerboardTransparency ) document.body.classList.add( 'checkerboard' );
-		else document.body.classList.remove( 'checkerboard' );
-
-		ptRenderer.reset();
-
-		buildGui()
-		console.log('changing style');
-	}
-
 	gui = new GUI();
 	const folderParams = { 
 		save() { 
 			saved = params;
-			savedGui = gui.save();
+			// savedGui = gui.save();
 			console.log( 'save', saved );
 			downloadJson(saved, 'params');
-			downloadJson(savedGui, 'gui');
+			// downloadJson(savedGui, 'gui');
 
 			},
 
 		load(){
 			let load = loadJson();
-			console.log( 'load=',load);
-			for (object in load){
-				console.log(object);
-				params[object] = load[object]
-			}
+			loadSettings(load)
 		}
 	}
 
@@ -468,10 +424,16 @@ function buildGui() {
 	GeneralFolder.add( params, 'model', Object.keys( models ) ).onChange( updateModel);
 	GeneralFolder.add( params, 'model' ).name( 'Model URL' ).onFinishChange( updateModel );
 
-	GeneralFolder.add( params, 'style',Object.keys(presets) ).onChange( v => {
+	GeneralFolder.add( params, 'style', Object.keys( presets ) ).onChange( v => {
 		refreshAll(v)
-	}
-);
+	})
+
+	GeneralFolder.add( params, 'Quality', Object.keys( qualities ) ).onChange( v => {
+		refreshQuality(v)
+	}),
+
+	GeneralFolder.add( params, 'targetSamples', 50,500,1 ).name('Samples').onChange(ptRenderer.reset())
+
 
 
 	const areaLight1Folder = gui.addFolder( 'Area Light 1' );
@@ -734,6 +696,63 @@ function buildGui() {
 	} ).listen();
 	cameraFolder.add( params, 'autoFocus' );
 	// cameraFolder.hide()
+
+
+	function loadSettings(object){
+		for ( key in object ){
+			console.log(key)
+			params[key] = object[key]
+		};
+		buildGui();
+	}
+
+	function refreshQuality(v){
+		for (key in qualities[v]){
+			// console.log(object)
+			params[key] = qualities[v][key]
+		};
+		buildGui();
+	}
+
+
+	function refreshAll(v) {
+		for (key in presets[v]){
+			// console.log(object)
+			params[key] = presets[v][key]
+		}
+
+		// params = presets[v]
+		// refresh everything
+		ptRenderer.material.setDefine( 'FEATURE_MIS', Number( params['multipleImportanceSampling'] ) );
+		renderer.toneMapping = params['acesToneMapping'] ? ACESFilmicToneMapping : NoToneMapping;
+		onResize();
+		ptRenderer.tiles.x = params.tilesX;
+		ptRenderer.tiles.y = params.tilesY;
+		updateCamera( params['cameraProjection'] );
+		updateEnvMap();
+		updateEnvBlur();
+		ptRenderer.material.environmentRotation.makeRotationY( params.environmentRotationY );
+		ptRenderer.material.environmentRotation.makeRotationZ( params.environmentRotationZ );
+
+		if ( params.backgroundType === 'Gradient' ) {
+			scene.background = backgroundMap;
+			ptRenderer.material.backgroundMap = backgroundMap;
+		} else {
+			scene.background = scene.environment;
+			ptRenderer.material.backgroundMap = null;
+		}
+		backgroundMap.topColor.set( params.bgGradientTop );
+		backgroundMap.topColor.set( params.bgGradientBottom );
+		ptRenderer.material.backgroundAlpha = params.backgroundAlpha
+
+		if ( params.checkerboardTransparency ) document.body.classList.add( 'checkerboard' );
+		else document.body.classList.remove( 'checkerboard' );
+
+		ptRenderer.reset();
+
+		buildGui()
+		console.log('refreshAll');
+	}
 }
 
 function updateEnvMap() {
@@ -1024,12 +1043,12 @@ async function updateModel() {
 
 		creditEl.innerHTML = modelInfo.credit || '';
 		creditEl.style.visibility = modelInfo.credit ? 'visible' : 'hidden';
-		params.bounces = modelInfo.bounces || 5;
-		params.floorColor = modelInfo.floorColor || '#3f3f3f';
-		params.floorRoughness = modelInfo.floorRoughness || 1.0;
-		params.floorMetalness = modelInfo.floorMetalness || 0.0;
-		params.bgGradientTop = modelInfo.gradientTop || '#111111';
-		params.bgGradientBottom = modelInfo.gradientBot || '#000000';
+		// params.bounces = modelInfo.bounces || 5;
+		// params.floorColor = modelInfo.floorColor || '#3f3f3f';
+		// params.floorRoughness = modelInfo.floorRoughness || 1.0;
+		// params.floorMetalness = modelInfo.floorMetalness || 0.0;
+		// params.bgGradientTop = modelInfo.gradientTop || '#111111';
+		// params.bgGradientBottom = modelInfo.gradientBot || '#000000';
 
 		backgroundMap.topColor.set( params.bgGradientTop );
 		backgroundMap.bottomColor.set( params.bgGradientBottom );
