@@ -57,6 +57,8 @@ console.log('presets=',presets);
 
 const focusPoint = new Vector3();
 
+
+
 let params = {
 	style : "Morning",
 	multipleImportanceSampling: true,
@@ -387,6 +389,33 @@ function loadJson() {
 	return data
 }
 
+// Material Presets
+const materialPresets = {
+	'Half Transparent': {
+		color: 0x8597A2,
+		roughness: 0.7,
+		metalness: 0.015,
+		transparent: true,
+		opacity: 0.15
+	},
+	'Maquette': {
+		color: 0xCEA16A,
+		roughness: 0.9,
+		metalness: 0.01
+	},
+	'Blue Foam': {
+		color: 0x539EBE,
+		roughness: 0.7,
+		metalness: 0.01,
+	},
+	'Arctic': {
+		color: 0xF5F5F5,
+		roughness: 0.2,
+		metalness: 0,
+		emissiveIntensity: 0.05,
+		emissive: 0xFFFFCC,
+	}
+};
 
 function buildGui() {
 
@@ -514,6 +543,23 @@ function buildGui() {
 	
 	}
 
+
+	
+	const materialParams = {
+		preset: 'Blue Foam'
+	};
+	
+	const materialFolder = gui.addFolder('Material');
+	materialFolder.add(materialParams, 'preset', ['Half Transparent', 'Maquette', 'Blue Foam', 'Arctic']).name('Presets').onChange(() => {
+		const preset = materialPresets[materialParams.preset];
+		
+		for (let i = 0; i < model.children.length; i++) {
+			updateMaterial(model.children[i], preset);
+		}
+	});
+	
+
+	materialFolder.open();	
 
 	const pathTracingFolder = gui.addFolder( 'path tracing' );
 	pathTracingFolder.add( params, 'enable' );
@@ -889,6 +935,23 @@ function convertOpacityToTransmission( model, ior ) {
 
 }
 
+let model;
+
+function updateMaterial(object, preset) {
+	if (object.type === "Mesh") {
+		if (object.material && object.material.map !== null) {
+			// Skip this mesh and its children since it has a custom texture
+			return;
+		}
+		object.material = new MeshStandardMaterial(preset);
+	}
+
+	for (let i = 0; i < object.children.length; i++) {
+		updateMaterial(object.children[i], preset);
+	}
+}
+
+
 async function updateModel() {
 
 	if ( gui ) {
@@ -898,8 +961,6 @@ async function updateModel() {
 		gui = null;
 
 	}
-
-	let model;
 	const manager = new LoadingManager();
 	const modelInfo = models[ params.model ];
 
@@ -1080,6 +1141,11 @@ async function updateModel() {
 
 					console.log( 'gltf=', gltf );
 					model = gltf.scene;
+					console.log(model.children);
+
+					for (var i = 0; i < model.children.length; i++) {
+						updateMaterial(model.children[i], materialPresets['Blue Foam']);
+					}			
 
 				},
 				progress => {
