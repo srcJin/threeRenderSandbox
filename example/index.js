@@ -132,7 +132,8 @@ let params = {
 
 	// AO
 	radius: 1.0, 
-	targetSamples : 200
+	targetSamples : 200,
+
 };
 
 

@@ -6,7 +6,7 @@ export const envMaps = {
 	'Noon 1':'http://dl.dropboxusercontent.com/s/40p49ttirgm0vi2/PureLIGHT_HDRi_001_Mid_Sun_Clouds.hdr',
 	'Noon 2':'http://dl.dropboxusercontent.com/s/75ipiqpqnl5zf6q/PureLIGHT_HDRi_002_Mid_Sun_Clouds.hdr',
 	'Sunset 1': 'http://dl.dropboxusercontent.com/s/jsambb8bkk39cm6/PureLIGHT_HDRi_003_Sunset_Clouds.hdr',
-	'Sunset 2': 'https://www.dropbox.com/s/9wynhuriavyqip7/PureLIGHT_HDRi_009_Sunset_Heavy_Clouds.hdr',
+	'Sunset 2': 'http://dl.dropboxusercontent.com/s/bxdkcpe97gj7rqm/industrial_sunset_02_puresky_1k.hdr',
     'Low Sun 1': 'http://dl.dropboxusercontent.com/s/dvqwdqtos1usp3z/PureLIGHT_HDRi_007_Low_Sun_Clouds.hdr',
 	'Low Sun 2': 'https://www.dropbox.com/s/ps96cl4rlr1k7zb/PureLIGHT_HDRi_006_Low_Sun_Clouds.hdr',
 	'Aristea Wreck Puresky': 'https://raw.githubusercontent.com/gkjohnson/3d-demo-data/master/hdri/aristea_wreck_puresky_2k.hdr',
