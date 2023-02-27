@@ -22,7 +22,7 @@ import {
 	Color,
 	DirectionalLight
 } from 'three';
-// import * as THREE from 'three';
+import * as THREE from 'three';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -146,6 +146,8 @@ let areaLights = [], directionalLights =[], enabledLights
 
 const orthoWidth = 2;
 
+
+
 init();
 
 async function init() {
@@ -160,6 +162,9 @@ async function init() {
 	document.body.appendChild( renderer.domElement );
 
 	scene = new Scene();
+
+	
+
 
 	const aspect = window.innerWidth / window.innerHeight;
 	perspectiveCamera = new PerspectiveCamera( 60, aspect, 0.025, 5000 );
@@ -204,6 +209,8 @@ async function init() {
 	// controls.lookSpeed = 0.1;
 
 	envMapGenerator = new BlurredEnvMapGenerator( renderer );
+
+
 
 	const floorTex = generateRadialFloorTexture( 2048 );
 	floorPlane = new Mesh(
@@ -317,6 +324,8 @@ function animate() {
 		delaySamples --;
 
 	}
+
+
 
 	samplesEl.innerText = `Samples: ${ Math.floor( ptRenderer.samples ) }`;
 
@@ -1018,10 +1027,6 @@ async function updateModel() {
 
 		sceneInfo = result;
 		scene.add( sceneInfo.scene );
-
-
-
-
 		const { bvh, textures, materials } = result;
 		const geometry = bvh.geometry;
 		const material = ptRenderer.material;
@@ -1068,6 +1073,8 @@ async function updateModel() {
 
 	};
 
+
+
 	const url = modelInfo.url;
 	if ( /(gltf|glb)$/i.test( url ) ) {
 		console.log( 'url=', url );
@@ -1081,7 +1088,52 @@ async function updateModel() {
 					console.log( 'gltf=', gltf );
 					model = gltf.scene;
 
+					// function updateMaterial(object) {
+					// 	if (object.type === "Mesh") {
+					// 	  if (object.material) {
+					// 		// Update materials for standard meshes
+					// 		if (object.material.map !== null && object.material.emissive !== undefined) {
+					// 		  object.material.emissive = new THREE.Color(0xeedd82);
+					// 		  object.material.emissiveIntensity = .55;
+					// 		  object.material.emissivePower = .8;
+					// 		}
+					// 	  }
+					// 	}
+						
+					// 	for (var i = 0; i < object.children.length; i++) {
+					// 	  updateMaterial(object.children[i]);
+					// 	}
+					//   }
+					  
+					//   for (var i = 0; i < model.children.length; i++) {
+					// 	updateMaterial(model.children[i]);
+					//   }
+					  
+					  
+					  
+					  
+
+					// for (let i = model.children.length - 1; i >= 0; i--) {
+					// 	const child = model.children[i];
+					  
+					// 	if (child.userData && child.userData.type === "park") {
+					// 	  // Loop through the children of the selected child and add a bounding box to each of them if their height is greater than 2
+					// 	  child.children.forEach(function(subChild) {
+					// 		const box = new THREE.Box3().setFromObject(subChild);
+					// 		const height = box.max.y - box.min.y;
+					  
+					// 		if (height > 2) {
+					// 		  const bbox = new THREE.BoxHelper(subChild, 0xffff00);
+					// 		  bbox.userData.type = "bbox";
+					// 		  model.add(bbox);
+					// 		}
+					// 	  });
+					// 	}
+					//   }
+
 				},
+
+				
 				progress => {
 
 					if ( progress.total !== 0 && progress.total >= progress.loaded ) {
